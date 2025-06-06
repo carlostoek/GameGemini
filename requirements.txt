@@ -1,7 +1,5 @@
-aiogram==3.
-python-dotenv==1.*
-SQLAlchemy==2.*
-# Asegúrate de tener
-aiosqlite para SQLite
-aiosqlite==0.19.*
-APScheduler==3.*
+aiogram
+python-dotenv
+SQLAlchemy
+aiosqlite
+APScheduler
