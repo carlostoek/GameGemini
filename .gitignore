@@ -1,0 +1,19 @@
+.env
+
+_pycache_/
+
+*.рус
+
+.pytest_cache/
+
+.venv/
+
+venv/
+
+env/
+
+*.db # Esto
+
+ignorará tu archivo gamification.db de
+
+SQLite
