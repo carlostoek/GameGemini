@@ -1,39 +1,38 @@
+# bot.py
 import asyncio
 import logging
 import datetime
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
-# Importar DefaultBotProperties desde aiogram.client.default para versiones 3.7.0+
 from aiogram.client.default import DefaultBotProperties
-from aiogram.fsm.storage.memory import MemoryStorage # Considera usar Redis para producción
+from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# Asegúrate de que estas importaciones sean correctas según la estructura de tu proyecto
-from database.setup import get_session, init_db
-from database.models import Event # Asumiendo que Event está en database.models
+from database.setup import get_session, init_db # Ahora init_db y get_session
+from database.models import Event
 from config import Config
 from handlers import user_handlers, admin_handlers
 
-# Configura el logging
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 async def main():
-    # Inicializa la base de datos
+    # --- CAMBIO DE OPTIMIZACIÓN DE DB AQUÍ ---
+    # Inicializa la base de datos y el motor UNA SOLA VEZ
     engine = await init_db()
+    # Ahora, obtén la factoría de sesión una sola vez.
+    # get_session() ya no llama a init_db(), sino que depende de _engine inicializado por init_db()
     Session = await get_session()
+    # --- FIN CAMBIO DE OPTIMIZACIÓN ---
 
-    # --- CORRECCIÓN CRÍTICA AQUÍ ---
-    # Inicialización del bot usando DefaultBotProperties para aiogram 3.7.0+
     bot = Bot(
         token=Config.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)
     )
-    # --- FIN DE LA CORRECCIÓN ---
 
-    # Inicializa el Dispatcher
     dp = Dispatcher(storage=MemoryStorage())
 
     # Registra los routers de handlers
@@ -41,7 +40,6 @@ async def main():
     dp.include_router(admin_handlers.router)
 
     # Middleware para pasar la sesión de la base de datos y la instancia del bot a los handlers
-    # Esto usa la forma recomendada de aiogram 3.x para middlewares "outer"
     def session_and_bot_middleware_factory(session_factory, bot_instance):
         async def session_and_bot_middleware(handler, event, data):
             async with session_factory() as session:
@@ -52,7 +50,6 @@ async def main():
 
     dp.message.outer_middleware(session_and_bot_middleware_factory(Session, bot))
     dp.callback_query.outer_middleware(session_and_bot_middleware_factory(Session, bot))
-
 
     # Configura y programa tareas con APScheduler
     scheduler = AsyncIOScheduler()
@@ -74,7 +71,7 @@ async def main():
                     await current_bot.send_message(Config.CHANNEL_ID,
                                                    f"📢 **¡Evento Finalizado!**\n\n"
                                                    f"El evento '{event.name}' ha terminado.",
-                                                   parse_mode=ParseMode.MARKDOWN) # Asegúrate de que este parse_mode sea consistente
+                                                   parse_mode=ParseMode.MARKDOWN)
                     logger.info(f"Event '{event.name}' deactivated.")
                 # Aquí podrías añadir lógica para notificar sobre eventos en curso periódicamente
                 # Por ejemplo, enviar recordatorios antes de que un evento termine.
@@ -84,7 +81,6 @@ async def main():
     scheduler.start()
 
     logger.info("Bot starting...")
-    # Elimina el webhook anterior y empieza a hacer polling para recibir actualizaciones
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
     logger.info("Bot stopped.")
