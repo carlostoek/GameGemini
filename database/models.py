@@ -1,3 +1,4 @@
+# database/models.py
 from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Boolean, JSON, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -20,6 +21,13 @@ class User(AsyncAttrs, Base):
     last_weekly_mission_reset = Column(DateTime, default=func.now())
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # ¡NUEVA COLUMNA para registrar reacciones a mensajes del canal!
+    # Guarda un diccionario donde la clave es el message_id del canal y el valor es un booleano (True)
+    # o el timestamp de la reacción para futura expansión si necesitamos historial.
+    # Por ahora, un simple booleano es suficiente para saber si ya reaccionó.
+    channel_reactions = Column(JSON, default={}) # {'message_id': True, 'message_id_2': True}
+
 
     def __repr__(self):
         return f"<User(id={self.id}, username='{self.username}', points={self.points}, level={self.level})>"
@@ -40,10 +48,11 @@ class Mission(AsyncAttrs, Base):
     name = Column(String, nullable=False)
     description = Column(Text)
     points_reward = Column(Integer, nullable=False)
-    type = Column(String, nullable=False) # 'daily', 'weekly', 'one_time', 'event'
+    type = Column(String, nullable=False) # 'daily', 'weekly', 'one_time', 'event', 'reaction' (NUEVO TIPO)
     is_active = Column(Boolean, default=True)
     requires_action = Column(Boolean, default=False) # True if requires a specific button click/action outside the bot's menu
-    action_data = Column(JSON, nullable=True) # e.g., {'button_id': 'unique_button_id'} or {'trivia_id': 1}
+    # action_data puede ser usado para especificar, por ejemplo, qué 'button_id' de reacción completa la misión
+    action_data = Column(JSON, nullable=True) # e.g., {'button_id': 'like_post_1'} or {'target_message_id': 12345}
     created_at = Column(DateTime, default=func.now())
 
 class Event(AsyncAttrs, Base):
@@ -52,7 +61,8 @@ class Event(AsyncAttrs, Base):
     name = Column(String, nullable=False)
     description = Column(Text)
     multiplier = Column(Integer, default=1) # e.g., 2 for double points
-    is_active = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
     start_time = Column(DateTime, default=func.now())
-    end_time = Column(DateTime, nullable=True) # Nullable for indefinite events
+    end_time = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
+    
