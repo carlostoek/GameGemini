@@ -4,7 +4,7 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton # Importar KeyboardButton y ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database.models import User, Mission, Reward
@@ -17,7 +17,9 @@ from utils.keyboard_utils import (
     get_main_menu_keyboard, get_profile_keyboard, get_missions_keyboard,
     get_reward_keyboard, get_confirm_purchase_keyboard, get_ranking_keyboard
 )
+# ¡Añade esta importación!
 from utils.message_utils import get_profile_message, get_mission_details_message, get_reward_details_message
+from utils.messages import BOT_MESSAGES # <--- NUEVA IMPORTACIÓN
 from config import Config
 import asyncio
 
@@ -36,23 +38,13 @@ async def cmd_start(message: Message, session: AsyncSession):
         session.add(user)
         await session.commit()
         await session.refresh(user)
-        # Mensaje de bienvenida inicial (se puede personalizar más adelante)
-        welcome_text = (
-            f"🎉 ¡Bienvenido a la comunidad VIP! 🎉\n\n"
-            "Aquí podrás acumular puntos, subir de nivel, desbloquear logros y canjear recompensas exclusivas "
-            "interactuando con el contenido del canal. ¡Tu anonimato es importante para nosotros!\n\n"
-            "Usa el menú de abajo para explorar tus opciones."
-        )
+        # Usa el mensaje personalizado para nuevos usuarios
+        welcome_text = BOT_MESSAGES["start_welcome_new_user"]
     else:
-        # Mensaje para usuarios existentes
-        welcome_text = (
-            f"👋 ¡Hola de nuevo! ¿Listo para seguir explorando la exclusividad?\n\n"
-            "Usa el menú de abajo para ver tus puntos, misiones y recompensas."
-        )
+        # Usa el mensaje personalizado para usuarios que regresan
+        welcome_text = BOT_MESSAGES["start_welcome_returning_user"]
 
-    # Si el mensaje viene de un callback query, no edites. Envía un nuevo mensaje con el teclado ReplyKeyboard
-    # Si viene de un comando (como /start), simplemente responde
-    if message.from_user.id == message.chat.id: # Si es un chat privado con el bot
+    if message.from_user.id == message.chat.id:
         await message.answer(welcome_text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
     else:
         await message.answer(welcome_text, parse_mode="Markdown")
@@ -63,7 +55,8 @@ async def cmd_start(message: Message, session: AsyncSession):
 async def show_profile(message: Message, session: AsyncSession):
     user = await session.get(User, message.from_user.id)
     if not user:
-        await message.answer("Parece que no estás registrado. Por favor, usa /start para iniciar.")
+        # Usa el mensaje personalizado
+        await message.answer(BOT_MESSAGES["profile_not_registered"])
         return
 
     mission_service = MissionService(session)
@@ -77,25 +70,27 @@ async def show_profile(message: Message, session: AsyncSession):
 async def show_achievements(callback: CallbackQuery, session: AsyncSession):
     user = await session.get(User, callback.from_user.id)
     if not user:
-        await callback.answer("Usuario no encontrado.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["reward_not_registered"], show_alert=True) # Reutilizando mensaje similar, o crear uno específico
         return
 
     achievement_service = AchievementService(session)
     granted_achievements_data = await achievement_service.get_user_achievements(user.id)
 
     if not granted_achievements_data:
-        achievements_text = "No tienes logros aún. ¡Sigue interactuando para desbloquearlos! 🚀"
+        # Usa el mensaje personalizado
+        achievements_text = BOT_MESSAGES["profile_no_achievements"]
     else:
         sorted_achievements = sorted(
             granted_achievements_data.values(),
             key=lambda x: datetime.datetime.fromisoformat(x['granted_at']),
             reverse=True
         )
+        # Mantén este formato de logro, pero usa el título personalizado
         achievements_formatted = [f"{ach['icon']} `{ach['name']}` - Desbloqueado el `{datetime.datetime.fromisoformat(ach['granted_at']).strftime('%d/%m/%Y')}`" for ach in sorted_achievements]
-        achievements_text = "🏆 **Tus Logros Desbloqueados:**\n\n" + "\n".join(achievements_formatted)
+        achievements_text = BOT_MESSAGES["profile_achievements_title"] + "\n\n" + "\n".join(achievements_formatted)
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Volver al Perfil", callback_data="show_profile")]
+        [InlineKeyboardButton(text=BOT_MESSAGES["back_to_profile_button_text"], callback_data="show_profile")] # Usa texto personalizado
     ])
     await callback.message.edit_text(achievements_text, reply_markup=keyboard, parse_mode="Markdown")
     await callback.answer()
@@ -105,7 +100,7 @@ async def show_achievements(callback: CallbackQuery, session: AsyncSession):
 async def back_to_profile(callback: CallbackQuery, session: AsyncSession):
     user = await session.get(User, callback.from_user.id)
     if not user:
-        await callback.answer("Usuario no encontrado.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["reward_not_registered"], show_alert=True) # Reutilizando
         return
     mission_service = MissionService(session)
     active_missions = await mission_service.get_active_missions(user.id)
@@ -118,49 +113,50 @@ async def back_to_profile(callback: CallbackQuery, session: AsyncSession):
 async def show_active_missions_profile(callback: CallbackQuery, session: AsyncSession):
     user = await session.get(User, callback.from_user.id)
     if not user:
-        await callback.answer("Usuario no encontrado.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["reward_not_registered"], show_alert=True) # Reutilizando
         return
 
     mission_service = MissionService(session)
     active_missions = await mission_service.get_active_missions(user.id)
 
     if not active_missions:
-        missions_text = "No tienes misiones activas. ¡Revisa la sección 'Misiones' para nuevas oportunidades! 🎯"
+        # Usa el mensaje personalizado
+        missions_text = BOT_MESSAGES["profile_no_active_missions"]
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Volver al Perfil", callback_data="show_profile")]
+            [InlineKeyboardButton(text=BOT_MESSAGES["back_to_profile_button_text"], callback_data="show_profile")] # Usa texto personalizado
         ])
     else:
         missions_list_text = []
         for mission in active_missions:
             missions_list_text.append(f"- **{mission.name}** (`{mission.points_reward}` Pts)")
-        missions_text = "🎯 **Tus Misiones Activas:**\n\n" + "\n".join(missions_list_text)
+        # Usa el título personalizado
+        missions_text = BOT_MESSAGES["profile_active_missions_title"] + "\n\n" + "\n".join(missions_list_text)
 
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Ver todas las misiones", callback_data="show_missions")],
-            [InlineKeyboardButton(text="🔙 Volver al Perfil", callback_data="show_profile")]
+            [InlineKeyboardButton(text=BOT_MESSAGES["view_all_missions_button_text"], callback_data="show_missions")], # Usa texto personalizado
+            [InlineKeyboardButton(text=BOT_MESSAGES["back_to_profile_button_text"], callback_data="show_profile")] # Usa texto personalizado
         ])
 
     await callback.message.edit_text(missions_text, reply_markup=keyboard, parse_mode="Markdown")
     await callback.answer()
-
 
 @router.message(F.text == "🎯 Misiones")
 @router.message(Command("misiones"))
 async def show_missions(message: Message, session: AsyncSession):
     user = await session.get(User, message.from_user.id)
     if not user:
-        await message.answer("Parece que no estás registrado. Por favor, usa /start para iniciar.")
+        await message.answer(BOT_MESSAGES["profile_not_registered"])
         return
 
     mission_service = MissionService(session)
     missions = await mission_service.get_active_missions(user.id)
 
     if not missions:
-        await message.answer("No hay misiones activas disponibles en este momento. ¡Vuelve pronto!",
-                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Volver al Menú Principal", callback_data="main_menu")]]), parse_mode="Markdown")
+        await message.answer(BOT_MESSAGES["missions_no_active"],
+                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=BOT_MESSAGES["back_to_main_menu_button_text"], callback_data="main_menu")]]), parse_mode="Markdown")
         return
 
-    await message.answer("🎯 **Misiones disponibles:**", reply_markup=get_missions_keyboard(missions, 0), parse_mode="Markdown")
+    await message.answer(BOT_MESSAGES["missions_title"], reply_markup=get_missions_keyboard(missions, 0), parse_mode="Markdown")
 
 
 @router.callback_query(F.data.startswith("missions_nav_"))
@@ -168,19 +164,19 @@ async def navigate_missions(callback: CallbackQuery, session: AsyncSession):
     offset = int(callback.data.split("_")[2])
     user = await session.get(User, callback.from_user.id)
     if not user:
-        await callback.answer("Usuario no encontrado.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["reward_not_registered"], show_alert=True)
         return
 
     mission_service = MissionService(session)
     missions = await mission_service.get_active_missions(user.id)
 
     if not missions:
-        await callback.message.edit_text("No hay misiones activas disponibles en este momento. ¡Vuelve pronto!",
-                                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Volver al Menú Principal", callback_data="main_menu")]]), parse_mode="Markdown")
+        await callback.message.edit_text(BOT_MESSAGES["missions_no_active"],
+                                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=BOT_MESSAGES["back_to_main_menu_button_text"], callback_data="main_menu")]]), parse_mode="Markdown")
         await callback.answer()
         return
 
-    await callback.message.edit_text("🎯 **Misiones disponibles:**", reply_markup=get_missions_keyboard(missions, offset), parse_mode="Markdown")
+    await callback.message.edit_text(BOT_MESSAGES["missions_title"], reply_markup=get_missions_keyboard(missions, offset), parse_mode="Markdown")
     await callback.answer()
 
 
@@ -191,27 +187,27 @@ async def show_mission_details(callback: CallbackQuery, session: AsyncSession):
     mission = await mission_service.get_mission_by_id(mission_id)
 
     if not mission:
-        await callback.answer("Misión no encontrada o inactiva.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["mission_not_found"], show_alert=True)
         return
 
     user = await session.get(User, callback.from_user.id)
     if not user:
-        await callback.answer("Usuario no encontrado.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["reward_not_registered"], show_alert=True)
         return
 
     is_completed_for_period, _ = await mission_service.check_mission_completion_status(user, mission)
     if is_completed_for_period:
-        await callback.answer("Ya completaste esta misión. ¡Vuelve cuando se reinicie!", show_alert=True)
+        await callback.answer(BOT_MESSAGES["mission_already_completed"], show_alert=True)
         return
 
     mission_text = await get_mission_details_message(mission)
     complete_button = []
     if not mission.requires_action:
-        complete_button.append([InlineKeyboardButton(text="✅ Completar Misión", callback_data=f"complete_mission_{mission_id}")])
+        complete_button.append([InlineKeyboardButton(text=BOT_MESSAGES["complete_mission_button_text"], callback_data=f"complete_mission_{mission_id}")])
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         *complete_button,
-        [InlineKeyboardButton(text="🔙 Volver a Misiones", callback_data=f"show_missions")]
+        [InlineKeyboardButton(text=BOT_MESSAGES["back_to_missions_button_text"], callback_data=f"show_missions")]
     ])
     await callback.message.edit_text(mission_text, reply_markup=keyboard, parse_mode="Markdown")
     await callback.answer()
@@ -234,38 +230,39 @@ async def complete_mission(callback: CallbackQuery, session: AsyncSession, bot: 
         await point_service.add_points(user_id, mission.points_reward)
         leveled_up = await level_service.check_for_level_up(user)
 
-        response_text = f"✅ ¡Misión '{mission.name}' completada! Has ganado `{mission.points_reward}` puntos."
+        response_text = BOT_MESSAGES["mission_completed_success"].format(mission_name=mission.name, points_reward=mission.points_reward)
         if leveled_up:
-            response_text += f" ¡Felicidades, has subido al Nivel {user.level}!"
+            response_text += BOT_MESSAGES["mission_level_up_bonus"].format(user_level=user.level)
 
-        if mission_id == "first_mission_example_id":
+        if mission_id == "first_mission_example_id": # Mantén esta lógica si es necesaria para el logro específico
             if await achievement_service.grant_achievement(user_id, "first_mission"):
-                response_text += f"\n🏆 ¡Has desbloqueado el logro 'Primera Misión Completada'!"
+                response_text += BOT_MESSAGES["mission_achievement_unlocked"].format(achievement_name=ACHIEVEMENTS["first_mission"]["name"]) # Usar el nombre del logro desde ACHIEVEMENTS
 
         await callback.message.edit_text(response_text, reply_markup=get_profile_keyboard(), parse_mode="Markdown")
     else:
-        response_text = "❌ No pudimos completar la misión. Asegúrate de que sea una misión activa o que no la hayas completado ya para este periodo."
+        response_text = BOT_MESSAGES["mission_completion_failed"]
         await callback.answer(response_text, show_alert=True)
 
     await callback.answer()
+
 
 @router.message(F.text == "🛍️ Tienda de Recompensas")
 @router.message(Command("tienda"))
 async def show_rewards(message: Message, session: AsyncSession):
     user = await session.get(User, message.from_user.id)
     if not user:
-        await message.answer("Parece que no estás registrado. Por favor, usa /start para iniciar.")
+        await message.answer(BOT_MESSAGES["profile_not_registered"])
         return
 
     reward_service = RewardService(session)
     rewards = await reward_service.get_active_rewards()
 
     if not rewards:
-        await message.answer("La tienda de recompensas está vacía. ¡Vuelve pronto!",
-                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Volver al Menú Principal", callback_data="main_menu")]]), parse_mode="Markdown")
+        await message.answer(BOT_MESSAGES["reward_shop_empty"],
+                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=BOT_MESSAGES["back_to_main_menu_button_text"], callback_data="main_menu")]]), parse_mode="Markdown")
         return
 
-    await message.answer("🛍️ **Recompensas disponibles:**", reply_markup=get_reward_keyboard(rewards, 0), parse_mode="Markdown")
+    await message.answer(BOT_MESSAGES["reward_shop_title"], reply_markup=get_reward_keyboard(rewards, 0), parse_mode="Markdown")
 
 
 @router.callback_query(F.data.startswith("rewards_nav_"))
@@ -275,12 +272,12 @@ async def navigate_rewards(callback: CallbackQuery, session: AsyncSession):
     rewards = await reward_service.get_active_rewards()
 
     if not rewards:
-        await callback.message.edit_text("La tienda de recompensas está vacía. ¡Vuelve pronto!",
-                                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Volver al Menú Principal", callback_data="main_menu")]]), parse_mode="Markdown")
+        await callback.message.edit_text(BOT_MESSAGES["reward_shop_empty"],
+                                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=BOT_MESSAGES["back_to_main_menu_button_text"], callback_data="main_menu")]]), parse_mode="Markdown")
         await callback.answer()
         return
 
-    await callback.message.edit_text("🛍️ **Recompensas disponibles:**", reply_markup=get_reward_keyboard(rewards, offset), parse_mode="Markdown")
+    await callback.message.edit_text(BOT_MESSAGES["reward_shop_title"], reply_markup=get_reward_keyboard(rewards, offset), parse_mode="Markdown")
     await callback.answer()
 
 
@@ -291,16 +288,16 @@ async def show_reward_details(callback: CallbackQuery, session: AsyncSession):
     reward = await reward_service.get_reward_by_id(reward_id)
 
     if not reward or not reward.is_active:
-        await callback.answer("Recompensa no encontrada o no disponible.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["reward_not_found"], show_alert=True)
         return
 
     user = await session.get(User, callback.from_user.id)
     if not user:
-        await callback.answer("Usuario no encontrado.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["reward_not_registered"], show_alert=True)
         return
 
     reward_text = await get_reward_details_message(reward, user.points)
-    await callback.message.edit_text(reward_text, reply_markup=get_confirm_purchase_keyboard(reward_id), parse_mode="Markdown")
+    await callback.message.edit_text(reward_text, reply_markup=get_confirm_purchase_keyboard(reward_id, reward.cost), parse_mode="Markdown") # Pasamos reward.cost aquí
     await callback.answer()
 
 
@@ -310,13 +307,21 @@ async def confirm_purchase(callback: CallbackQuery, session: AsyncSession):
     user_id = callback.from_user.id
 
     reward_service = RewardService(session)
-    success, message = await reward_service.purchase_reward(user_id, reward_id)
+    success, message_key = await reward_service.purchase_reward(user_id, reward_id) # message_key ahora es una clave del diccionario
+
+    user = await session.get(User, user_id) # Para obtener puntos actualizados si es necesario
+    reward = await reward_service.get_reward_by_id(reward_id) # Para obtener el costo si el mensaje lo necesita
 
     if success:
-        await callback.message.delete() # Eliminar el mensaje con el teclado inline de la recompensa
-        await callback.message.answer(message, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+        message_to_send = BOT_MESSAGES[message_key] # Obtener el mensaje real
+        await callback.message.delete()
+        await callback.message.answer(message_to_send, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
     else:
-        await callback.message.edit_text(message, reply_markup=get_confirm_purchase_keyboard(reward_id), parse_mode="Markdown")
+        # Aquí, message_key podría ser directamente el texto si el error es genérico o la clave del mensaje
+        message_to_send = BOT_MESSAGES[message_key]
+        if message_key == "reward_not_enough_points":
+            message_to_send = message_to_send.format(required_points=reward.cost, user_points=user.points)
+        await callback.message.edit_text(message_to_send, reply_markup=get_confirm_purchase_keyboard(reward_id, reward.cost), parse_mode="Markdown")
     await callback.answer()
 
 
@@ -335,12 +340,11 @@ async def show_ranking(message: Message, session: AsyncSession):
     top_users = result.scalars().all()
 
     if not top_users:
-        await message.answer("Aún no hay usuarios en el ranking. ¡Sé el primero en la cima! 🚀", reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
+        await message.answer(BOT_MESSAGES["ranking_no_users"], reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
         return
 
-    ranking_text = "🏆 **Ranking de Usuarios (Top 10):**\n\n" # Mantenemos el doble salto para el título
+    ranking_text = BOT_MESSAGES["ranking_title"] + "\n\n"
 
-    # Nuevo formato para cada entrada del ranking
     ranking_entries = []
     for i, user in enumerate(top_users):
         display_name = ""
@@ -349,18 +353,17 @@ async def show_ranking(message: Message, session: AsyncSession):
             display_name = display_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
         else:
             if user.username:
-                display_name = f"@{user.username[0]}\\*****" # <-- CAMBIO CLAVE AQUÍ: Doble backslash para escapar el asterisco
+                display_name = f"@{user.username[0]}\\*****"
             elif user.first_name:
-                display_name = f"{user.first_name[0]}\\*****" # <-- CAMBIO CLAVE AQUÍ: Doble backslash para escapar el asterisco
+                display_name = f"{user.first_name[0]}\\*****"
             else:
                 display_name = "Usuario Anónimo"
 
-        # Formato compacto: #Pos. Nombre (Puntos, Nivel)
         ranking_entries.append(
             f"`#{offset + i + 1}.` {display_name} (`{user.points}` Pts, Nv. `{user.level}`)"
         )
 
-    ranking_text += "\n".join(ranking_entries) # Unir las entradas con un solo salto de línea
+    ranking_text += "\n".join(ranking_entries)
 
     await message.answer(ranking_text, reply_markup=get_ranking_keyboard(offset, total_users), parse_mode="Markdown")
 
@@ -379,13 +382,12 @@ async def navigate_ranking(callback: CallbackQuery, session: AsyncSession):
     top_users = result.scalars().all()
 
     if not top_users:
-        await callback.message.edit_text("Aún no hay usuarios en el ranking. ¡Sé el primero en la cima! 🚀", reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
+        await callback.message.edit_text(BOT_MESSAGES["ranking_no_users"], reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
         await callback.answer()
         return
 
-    ranking_text = "🏆 **Ranking de Usuarios:**\n\n" # Mantenemos el doble salto para el título
+    ranking_text = BOT_MESSAGES["ranking_title"] + "\n\n"
 
-    # Nuevo formato para cada entrada del ranking
     ranking_entries = []
     for i, user in enumerate(top_users):
         display_name = ""
@@ -394,29 +396,27 @@ async def navigate_ranking(callback: CallbackQuery, session: AsyncSession):
             display_name = display_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
         else:
             if user.username:
-                display_name = f"@{user.username[0]}\\*****" # <-- CAMBIO CLAVE AQUÍ: Doble backslash para escapar el asterisco
+                display_name = f"@{user.username[0]}\\*****"
             elif user.first_name:
-                display_name = f"{user.first_name[0]}\\*****" # <-- CAMBIO CLAVE AQUÍ: Doble backslash para escapar el asterisco
+                display_name = f"{user.first_name[0]}\\*****"
             else:
                 display_name = "Usuario Anónimo"
 
-        # Formato compacto: #Pos. Nombre (Puntos, Nivel)
         ranking_entries.append(
             f"`#{offset + i + 1}.` {display_name} (`{user.points}` Pts, Nv. `{user.level}`)"
         )
 
-    ranking_text += "\n".join(ranking_entries) # Unir las entradas con un solo salto de línea
+    ranking_text += "\n".join(ranking_entries)
 
     await callback.message.edit_text(ranking_text, reply_markup=get_ranking_keyboard(offset, total_users), parse_mode="Markdown")
     await callback.answer()
 
-# --- MODIFICADO HANDLER PARA "VOLVER AL MENÚ PRINCIPAL" ---
 @router.callback_query(F.data == "main_menu")
 async def back_to_main_menu(callback: CallbackQuery, session: AsyncSession):
     user_id = callback.from_user.id
     user = await session.get(User, user_id)
     if not user:
-        await callback.answer("Usuario no encontrado. Por favor, usa /start.", show_alert=True)
+        await callback.answer(BOT_MESSAGES["reward_not_registered"], show_alert=True)
         return
 
     try:
@@ -425,7 +425,7 @@ async def back_to_main_menu(callback: CallbackQuery, session: AsyncSession):
         print(f"Error deleting message in back_to_main_menu: {e}")
         pass
 
-    menu_message = "¡Has regresado al menú principal! Aquí puedes navegar por las opciones principales de la comunidad VIP."
+    menu_message = BOT_MESSAGES["back_to_main_menu"]
     await callback.message.answer(menu_message, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
     await callback.answer()
-    
+                       
