@@ -1,6 +1,6 @@
 # utils/keyboard_utils.py
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
-from utils.messages import BOT_MESSAGES # <--- NUEVA IMPORTACIÓN
+from utils.messages import BOT_MESSAGES # Asegúrate de que esta importación exista
 
 def get_main_menu_keyboard():
     keyboard = ReplyKeyboardMarkup(
@@ -54,18 +54,16 @@ def get_reward_keyboard(rewards: list, offset: int = 0):
 
 
 def get_confirm_purchase_keyboard(reward_id: int, reward_cost: int):
-    # Usar el mensaje personalizado para el botón de compra
     confirm_text = BOT_MESSAGES["confirm_purchase_button_text"].format(cost=reward_cost)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=confirm_text, callback_data=f"purchase_{reward_id}")],
-        [InlineKeyboardButton(text=BOT_MESSAGES["cancel_purchase_button_text"], callback_data=f"reward_{reward_id}")] # Volver a la recompensa específica
+        [InlineKeyboardButton(text=BOT_MESSAGES["cancel_purchase_button_text"], callback_data=f"reward_{reward_id}")]
     ])
     return keyboard
 
 def get_ranking_keyboard(offset: int = 0, total_users: int = 0):
     keyboard = []
     nav_buttons = []
-    # Show 10 users per page for ranking
     if offset > 0:
         nav_buttons.append(InlineKeyboardButton(text=BOT_MESSAGES["prev_page_button_text"], callback_data=f"ranking_nav_{max(0, offset-10)}"))
     if offset + 10 < total_users:
@@ -83,7 +81,25 @@ def get_admin_main_keyboard():
         [InlineKeyboardButton(text="📊 Exportar Datos", callback_data="admin_export_data")],
         [InlineKeyboardButton(text="🔄 Resetear Temporada", callback_data="admin_reset_season")],
         [InlineKeyboardButton(text="🎁 Asignar Puntos", callback_data="admin_assign_points")],
+        [InlineKeyboardButton(text="📢 Enviar mensaje con reacciones al Canal", callback_data="admin_send_channel_post_reactions")], # NUEVO BOTÓN
         [InlineKeyboardButton(text="🔙 Menú Principal", callback_data="main_menu")]
     ])
     return keyboard
-    
+
+# ¡NUEVA FUNCIÓN para generar botones de reacción!
+def get_reaction_keyboard(message_id: int):
+    # Definimos los botones de reacción que queremos.
+    # El callback_data debe ser único e incluir el message_id para saber a qué mensaje se reaccionó.
+    # El formato es "reaction_{message_id}_{reaction_type_id}"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="💖 Resuena con mi Alma", callback_data=f"reaction_{message_id}_soul"),
+            InlineKeyboardButton(text="🤔 Me hace Reflexionar", callback_data=f"reaction_{message_id}_think")
+        ],
+        [
+            InlineKeyboardButton(text="💡 Iluminación Instantánea", callback_data=f"reaction_{message_id}_light"),
+            InlineKeyboardButton(text="✨ Pura Inspiración", callback_data=f"reaction_{message_id}_inspire")
+        ]
+    ])
+    return keyboard
+
