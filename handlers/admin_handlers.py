@@ -1,4 +1,4 @@
-# handlers/admin_handlers.py
+# handlers/admin_handlers.py - Bloque 1 de 2
 import json
 import csv
 import io
@@ -141,7 +141,7 @@ async def admin_process_mission_points(message: Message, state: FSMContext):
         await message.answer("Puntos inválidos. Por favor, ingresa un número.")
 
 @router.message(AdminStates.creating_mission_type)
-async def admin_process_mission_type(message: Message, state: FSMContext):
+async def admin_process_mission_type(message: Message, state: FSMContext, session: AsyncSession): # <-- ¡CORRECCIÓN AQUÍ!
     if message.from_user.id != Config.ADMIN_ID: return
     mission_type = message.text.lower()
     valid_types = ['daily', 'weekly', 'one_time', 'event', 'reaction']
@@ -156,7 +156,7 @@ async def admin_process_mission_type(message: Message, state: FSMContext):
         # but for now, we'll keep it simple and just mark that it requires action.
         await state.update_data(action_data={}) # No specific action_data needed for now, but keep as dict
         data = await state.get_data()
-        mission_service = MissionService(message.bot.get('session')) # Access session via bot data
+        mission_service = MissionService(session) # <-- ¡CORRECCIÓN AQUÍ!
         await mission_service.create_mission(
             data['name'], data['description'], data['points_reward'], data['type'],
             data['requires_action'], data.get('action_data')
@@ -166,6 +166,7 @@ async def admin_process_mission_type(message: Message, state: FSMContext):
     else: # For other mission types, ask about requires_action
         await message.answer("¿Requiere una acción externa para completarse? (Sí/No):")
         await state.set_state(AdminStates.creating_mission_requires_action)
+        # handlers/admin_handlers.py - Bloque 2 de 2 (continuación)
 
 @router.message(AdminStates.creating_mission_requires_action)
 async def admin_process_mission_requires_action(message: Message, state: FSMContext, session: AsyncSession):
@@ -389,7 +390,16 @@ async def admin_process_event_duration(message: Message, state: FSMContext, sess
 
 
 # ¡NUEVOS HANDLERS para enviar mensajes al canal con botones de reacción!
-# handlers/admin_handlers.py (continuación)
+@router.callback_query(F.data == "admin_send_channel_post_reactions")
+async def admin_start_channel_post_reactions(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != Config.ADMIN_ID: return
+    await callback.message.edit_text(
+        "Por favor, envía el **texto del mensaje** que quieres publicar en el canal. "
+        "Este mensaje tendrá los botones de reacción configurados debajo.",
+        parse_mode="Markdown"
+    )
+    await state.set_state(AdminStates.waiting_for_channel_post_text)
+    await callback.answer()
 
 @router.message(AdminStates.waiting_for_channel_post_text)
 async def admin_process_channel_post_text(message: Message, state: FSMContext, bot: Bot):
@@ -431,4 +441,4 @@ async def admin_process_channel_post_text(message: Message, state: FSMContext, b
         logger.error(f"Error sending channel post with reactions: {e}")
         await message.answer(f"❌ Error al publicar el mensaje en el canal: `{e}`", reply_markup=get_admin_main_keyboard(), parse_mode="Markdown")
         await state.clear()
-        
+            
