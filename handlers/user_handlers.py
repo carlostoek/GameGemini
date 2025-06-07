@@ -4,7 +4,7 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton # Importar KeyboardButton y ReplyKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database.models import User, Mission, Reward
@@ -27,7 +27,7 @@ router = Router()
 async def cmd_start(message: Message, session: AsyncSession):
     user_id = message.from_user.id
     username = message.from_user.username
-    first_name = message.from_user.first_name # Mantener para la creación de usuario, pero no usar en mensajes públicos
+    first_name = message.from_user.first_name
     last_name = message.from_user.last_name
 
     user = await session.get(User, user_id)
@@ -38,7 +38,7 @@ async def cmd_start(message: Message, session: AsyncSession):
         await session.refresh(user)
         # Mensaje de bienvenida inicial (se puede personalizar más adelante)
         welcome_text = (
-            f"🎉 ¡Bienvenido{' de nuevo' if user.username else ''} a la comunidad VIP! 🎉\n\n"
+            f"🎉 ¡Bienvenido a la comunidad VIP! 🎉\n\n"
             "Aquí podrás acumular puntos, subir de nivel, desbloquear logros y canjear recompensas exclusivas "
             "interactuando con el contenido del canal. ¡Tu anonimato es importante para nosotros!\n\n"
             "Usa el menú de abajo para explorar tus opciones."
@@ -46,11 +46,19 @@ async def cmd_start(message: Message, session: AsyncSession):
     else:
         # Mensaje para usuarios existentes
         welcome_text = (
-            f"👋 ¡Hola{' de nuevo' if user.username else ''}! ¿Listo para seguir explorando la exclusividad?\n\n"
+            f"👋 ¡Hola de nuevo! ¿Listo para seguir explorando la exclusividad?\n\n"
             "Usa el menú de abajo para ver tus puntos, misiones y recompensas."
         )
 
-    await message.answer(welcome_text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+    # Si el mensaje viene de un callback query, no edites. Envía un nuevo mensaje con el teclado ReplyKeyboardMarkup
+    # Si viene de un comando (como /start), simplemente responde
+    if message.from_user.id == message.chat.id: # Si es un chat privado con el bot
+        await message.answer(welcome_text, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+    else:
+        # Esto es solo para asegurar que /start en grupos se maneja bien, aunque el bot está diseñado para canales VIP y chats privados.
+        # Para evitar enviar ReplyKeyboards en grupos/canales si no es deseado, podrías ajustar esto.
+        # Por ahora, simplemente responde.
+        await message.answer(welcome_text, parse_mode="Markdown")
 
 
 @router.message(F.text == "👤 Mi Perfil")
@@ -64,7 +72,6 @@ async def show_profile(message: Message, session: AsyncSession):
     mission_service = MissionService(session)
     active_missions = await mission_service.get_active_missions(user.id)
 
-    # get_profile_message ya se encarga de formatear el texto
     profile_text = await get_profile_message(user, active_missions)
     await message.answer(profile_text, reply_markup=get_profile_keyboard(), parse_mode="Markdown")
 
@@ -82,7 +89,6 @@ async def show_achievements(callback: CallbackQuery, session: AsyncSession):
     if not granted_achievements_data:
         achievements_text = "No tienes logros aún. ¡Sigue interactuando para desbloquearlos! 🚀"
     else:
-        # Order achievements by granted_at (most recent first)
         sorted_achievements = sorted(
             granted_achievements_data.values(),
             key=lambda x: datetime.datetime.fromisoformat(x['granted_at']),
@@ -92,13 +98,13 @@ async def show_achievements(callback: CallbackQuery, session: AsyncSession):
         achievements_text = "🏆 **Tus Logros Desbloqueados:**\n\n" + "\n".join(achievements_formatted)
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 Volver al Perfil", callback_data="show_profile")] # Volver al perfil
+        [InlineKeyboardButton(text="🔙 Volver al Perfil", callback_data="show_profile")]
     ])
     await callback.message.edit_text(achievements_text, reply_markup=keyboard, parse_mode="Markdown")
-    await callback.answer() # Close the loading animation on the button
+    await callback.answer()
 
 
-@router.callback_query(F.data == "show_profile") # Handler para el botón "Volver al Perfil"
+@router.callback_query(F.data == "show_profile")
 async def back_to_profile(callback: CallbackQuery, session: AsyncSession):
     user = await session.get(User, callback.from_user.id)
     if not user:
@@ -132,9 +138,8 @@ async def show_active_missions_profile(callback: CallbackQuery, session: AsyncSe
             missions_list_text.append(f"- **{mission.name}** (`{mission.points_reward}` Pts)")
         missions_text = "🎯 **Tus Misiones Activas:**\n\n" + "\n".join(missions_list_text)
 
-        # Aquí podríamos querer mostrar un botón para ir a la sección completa de misiones si es muy larga
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Ver todas las misiones", callback_data="show_missions")], # Podría llevar al /missions
+            [InlineKeyboardButton(text="Ver todas las misiones", callback_data="show_missions")],
             [InlineKeyboardButton(text="🔙 Volver al Perfil", callback_data="show_profile")]
         ])
 
@@ -151,13 +156,14 @@ async def show_missions(message: Message, session: AsyncSession):
         return
 
     mission_service = MissionService(session)
-    missions = await mission_service.get_active_missions(user.id) # Get all active missions, filtered by user completion
+    missions = await mission_service.get_active_missions(user.id)
 
     if not missions:
-        await message.answer("No hay misiones activas disponibles en este momento. ¡Vuelve pronto!", reply_markup=get_missions_keyboard([]), parse_mode="Markdown")
+        # Si no hay misiones, aún así mostrar el menú para regresar al menú principal
+        await message.answer("No hay misiones activas disponibles en este momento. ¡Vuelve pronto!",
+                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Volver al Menú Principal", callback_data="main_menu")]]), parse_mode="Markdown")
         return
 
-    # Using get_missions_keyboard with offset
     await message.answer("🎯 **Misiones disponibles:**", reply_markup=get_missions_keyboard(missions, 0), parse_mode="Markdown")
 
 
@@ -173,7 +179,8 @@ async def navigate_missions(callback: CallbackQuery, session: AsyncSession):
     missions = await mission_service.get_active_missions(user.id)
 
     if not missions:
-        await callback.message.edit_text("No hay misiones activas disponibles en este momento. ¡Vuelve pronto!", reply_markup=get_missions_keyboard([]), parse_mode="Markdown")
+        await callback.message.edit_text("No hay misiones activas disponibles en este momento. ¡Vuelve pronto!",
+                                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Volver al Menú Principal", callback_data="main_menu")]]), parse_mode="Markdown")
         await callback.answer()
         return
 
@@ -191,15 +198,11 @@ async def show_mission_details(callback: CallbackQuery, session: AsyncSession):
         await callback.answer("Misión no encontrada o inactiva.", show_alert=True)
         return
 
-    # Check if user already completed this mission for the current period
     user = await session.get(User, callback.from_user.id)
     if not user:
         await callback.answer("Usuario no encontrado.", show_alert=True)
         return
 
-    # Re-check completion logic if needed, as get_active_missions already filters
-    # For now, assume if we got here, it's active and not completed for the period
-    # But a direct check is safer if this handler can be reached independently
     is_completed_for_period, _ = await mission_service.check_mission_completion_status(user, mission)
     if is_completed_for_period:
         await callback.answer("Ya completaste esta misión. ¡Vuelve cuando se reinicie!", show_alert=True)
@@ -207,14 +210,12 @@ async def show_mission_details(callback: CallbackQuery, session: AsyncSession):
 
     mission_text = await get_mission_details_message(mission)
     complete_button = []
-    # If mission requires a specific action outside the bot's menu, don't show a complete button here.
-    # We will need specific handlers for those actions.
     if not mission.requires_action:
         complete_button.append([InlineKeyboardButton(text="✅ Completar Misión", callback_data=f"complete_mission_{mission_id}")])
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         *complete_button,
-        [InlineKeyboardButton(text="🔙 Volver a Misiones", callback_data=f"show_missions")] # Volver a la lista de misiones
+        [InlineKeyboardButton(text="🔙 Volver a Misiones", callback_data=f"show_missions")]
     ])
     await callback.message.edit_text(mission_text, reply_markup=keyboard, parse_mode="Markdown")
     await callback.answer()
@@ -233,7 +234,7 @@ async def complete_mission(callback: CallbackQuery, session: AsyncSession, bot: 
     success, mission = await mission_service.complete_mission(user_id, mission_id)
 
     if success:
-        user = await session.get(User, user_id) # Get updated user
+        user = await session.get(User, user_id)
         await point_service.add_points(user_id, mission.points_reward)
         leveled_up = await level_service.check_for_level_up(user)
 
@@ -241,12 +242,11 @@ async def complete_mission(callback: CallbackQuery, session: AsyncSession, bot: 
         if leveled_up:
             response_text += f" ¡Felicidades, has subido al Nivel {user.level}!"
 
-        # Check for achievements based on mission completion (example)
-        if mission_id == "first_mission_example_id": # Replace with actual first mission ID
+        if mission_id == "first_mission_example_id":
             if await achievement_service.grant_achievement(user_id, "first_mission"):
                 response_text += f"\n🏆 ¡Has desbloqueado el logro 'Primera Misión Completada'!"
 
-        await callback.message.edit_text(response_text, reply_markup=get_profile_keyboard(), parse_mode="Markdown") # Redirigir al perfil
+        await callback.message.edit_text(response_text, reply_markup=get_profile_keyboard(), parse_mode="Markdown")
     else:
         response_text = "❌ No pudimos completar la misión. Asegúrate de que sea una misión activa o que no la hayas completado ya para este periodo."
         await callback.answer(response_text, show_alert=True)
@@ -266,7 +266,9 @@ async def show_rewards(message: Message, session: AsyncSession):
     rewards = await reward_service.get_active_rewards()
 
     if not rewards:
-        await message.answer("La tienda de recompensas está vacía. ¡Vuelve pronto!", reply_markup=get_reward_keyboard([]), parse_mode="Markdown")
+        # Si no hay recompensas, aún así mostrar el menú para regresar al menú principal
+        await message.answer("La tienda de recompensas está vacía. ¡Vuelve pronto!",
+                             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Volver al Menú Principal", callback_data="main_menu")]]), parse_mode="Markdown")
         return
 
     await message.answer("🛍️ **Recompensas disponibles:**", reply_markup=get_reward_keyboard(rewards, 0), parse_mode="Markdown")
@@ -279,7 +281,8 @@ async def navigate_rewards(callback: CallbackQuery, session: AsyncSession):
     rewards = await reward_service.get_active_rewards()
 
     if not rewards:
-        await callback.message.edit_text("La tienda de recompensas está vacía. ¡Vuelve pronto!", reply_markup=get_reward_keyboard([]), parse_mode="Markdown")
+        await callback.message.edit_text("La tienda de recompensas está vacía. ¡Vuelve pronto!",
+                                         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔙 Volver al Menú Principal", callback_data="main_menu")]]), parse_mode="Markdown")
         await callback.answer()
         return
 
@@ -316,25 +319,30 @@ async def confirm_purchase(callback: CallbackQuery, session: AsyncSession):
     success, message = await reward_service.purchase_reward(user_id, reward_id)
 
     if success:
-        await callback.message.edit_text(message, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown") # Volver al menú principal
+        # Enviar un nuevo mensaje con el teclado ReplyKeyboardMarkup y eliminar el mensaje anterior.
+        await callback.message.delete() # Eliminar el mensaje con el teclado inline de la recompensa
+        await callback.message.answer(message, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
     else:
-        await callback.message.edit_text(message, reply_markup=get_confirm_purchase_keyboard(reward_id), parse_mode="Markdown") # Mostrar el mensaje de error y mantener opciones de recompensa
+        # Si falla, mantener el mensaje actual y las opciones de compra
+        await callback.message.edit_text(message, reply_markup=get_confirm_purchase_keyboard(reward_id), parse_mode="Markdown")
     await callback.answer()
 
 
 @router.message(F.text == "🏆 Ranking")
 @router.message(Command("ranking"))
 async def show_ranking(message: Message, session: AsyncSession):
-    user_id = message.from_user.id # Get current user's ID
-    offset = 0 # Start from the beginning
+    user_id = message.from_user.id
+    offset = 0
 
-    stmt = select(User).order_by(User.points.desc()).offset(offset).limit(10)
-    result = await session.execute(stmt)
-    top_users = result.scalars().all()
-
+    # Obtener el total de usuarios primero para la navegación
     total_users_stmt = select(func.count(User.id))
     total_users_result = await session.execute(total_users_stmt)
     total_users = total_users_result.scalar_one()
+
+    # Obtener los usuarios para la página actual
+    stmt = select(User).order_by(User.points.desc(), User.id.asc()).offset(offset).limit(10) # Añadir User.id.asc() para desempate si hay mismos puntos
+    result = await session.execute(stmt)
+    top_users = result.scalars().all()
 
     if not top_users:
         await message.answer("Aún no hay usuarios en el ranking. ¡Sé el primero en la cima! 🚀", reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
@@ -342,33 +350,37 @@ async def show_ranking(message: Message, session: AsyncSession):
 
     ranking_text = "🏆 **Ranking de Usuarios (Top 10):**\n\n"
     for i, user in enumerate(top_users):
-        # ANOMINIZACIÓN DEL RANKING
         display_name = ""
-        if user.id == user_id: # Si es el usuario actual, mostrar su nombre completo (o username si no tiene name)
+        if user.id == user_id:
             display_name = user.first_name or user.username or "Tú"
-        else: # Para otros usuarios, anonimizar
+        else:
             if user.username:
-                display_name = f"@{user.username[0]}*****" # Primera letra del username y asteriscos
+                # Anonimizar username: primera letra y asteriscos
+                display_name = f"@{user.username[0]}*****"
             elif user.first_name:
-                display_name = f"{user.first_name[0]}*****" # Primera letra del first_name y asteriscos
+                # Anonimizar first_name: primera letra y asteriscos
+                display_name = f"{user.first_name[0]}*****"
             else:
-                display_name = "Usuario Anónimo" # Fallback si no hay nombre ni username
+                display_name = "Usuario Anónimo"
 
         ranking_text += f"`{offset + i + 1}.` {display_name} - `{user.points}` puntos (Nivel `{user.level}`)\n"
 
+    # Enviar el mensaje con el ranking y el teclado inline.
     await message.answer(ranking_text, reply_markup=get_ranking_keyboard(offset, total_users), parse_mode="Markdown")
+
 
 @router.callback_query(F.data.startswith("ranking_nav_"))
 async def navigate_ranking(callback: CallbackQuery, session: AsyncSession):
-    user_id = callback.from_user.id # Get current user's ID
+    user_id = callback.from_user.id
     offset = int(callback.data.split("_")[2])
-    stmt = select(User).order_by(User.points.desc()).offset(offset).limit(10)
-    result = await session.execute(stmt)
-    top_users = result.scalars().all()
 
     total_users_stmt = select(func.count(User.id))
     total_users_result = await session.execute(total_users_stmt)
     total_users = total_users_result.scalar_one()
+
+    stmt = select(User).order_by(User.points.desc(), User.id.asc()).offset(offset).limit(10) # Añadir User.id.asc()
+    result = await session.execute(stmt)
+    top_users = result.scalars().all()
 
     if not top_users:
         await callback.message.edit_text("Aún no hay usuarios en el ranking. ¡Sé el primero en la cima! 🚀", reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
@@ -377,24 +389,23 @@ async def navigate_ranking(callback: CallbackQuery, session: AsyncSession):
 
     ranking_text = "🏆 **Ranking de Usuarios:**\n\n"
     for i, user in enumerate(top_users):
-        # ANOMINIZACIÓN DEL RANKING
         display_name = ""
-        if user.id == user_id: # Si es el usuario actual, mostrar su nombre completo (o username si no tiene name)
+        if user.id == user_id:
             display_name = user.first_name or user.username or "Tú"
-        else: # Para otros usuarios, anonimizar
+        else:
             if user.username:
-                display_name = f"@{user.username[0]}*****" # Primera letra del username y asteriscos
+                display_name = f"@{user.username[0]}*****"
             elif user.first_name:
-                display_name = f"{user.first_name[0]}*****" # Primera letra del first_name y asteriscos
+                display_name = f"{user.first_name[0]}*****"
             else:
-                display_name = "Usuario Anónimo" # Fallback si no hay nombre ni username
+                display_name = "Usuario Anónimo"
 
         ranking_text += f"`{offset + i + 1}.` {display_name} - `{user.points}` puntos (Nivel `{user.level}`)\n"
 
     await callback.message.edit_text(ranking_text, reply_markup=get_ranking_keyboard(offset, total_users), parse_mode="Markdown")
     await callback.answer()
 
-# --- NUEVO HANDLER PARA "VOLVER AL MENÚ PRINCIPAL" ---
+# --- MODIFICADO HANDLER PARA "VOLVER AL MENÚ PRINCIPAL" ---
 @router.callback_query(F.data == "main_menu")
 async def back_to_main_menu(callback: CallbackQuery, session: AsyncSession):
     user_id = callback.from_user.id
@@ -403,8 +414,16 @@ async def back_to_main_menu(callback: CallbackQuery, session: AsyncSession):
         await callback.answer("Usuario no encontrado. Por favor, usa /start.", show_alert=True)
         return
 
-    # Mensaje genérico para el menú principal, anonimizado
-    menu_message = "¡Bienvenido de nuevo! Aquí puedes navegar por las opciones principales de la comunidad VIP."
-    await callback.message.edit_text(menu_message, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
-    await callback.answer()
+    # Eliminar el mensaje anterior (el que contenía el botón inline)
+    # Esto es crucial para no dejar teclados inline flotando y para que el ReplyKeyboard se muestre limpiamente
+    try:
+        await callback.message.delete()
+    except Exception as e:
+        # Puede fallar si el mensaje ya fue eliminado o si no es un mensaje que se pueda borrar (ej. de un canal)
+        print(f"Error deleting message in back_to_main_menu: {e}")
+        pass # Ignorar el error de eliminación si no es crítico
 
+    # Enviar un NUEVO mensaje con el ReplyKeyboardMarkup del menú principal
+    menu_message = "¡Has regresado al menú principal! Aquí puedes navegar por las opciones principales de la comunidad VIP."
+    await callback.message.answer(menu_message, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
+    await callback.answer() # Siempre responder al callback query
