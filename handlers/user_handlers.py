@@ -338,67 +338,6 @@ async def show_ranking(message: Message, session: AsyncSession):
         await message.answer("Aún no hay usuarios en el ranking. ¡Sé el primero en la cima! 🚀", reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
         return
 
-    ranking_text = "🏆 **Ranking de Usuarios (Top 10):**\n\n"
-    for i, user in enumerate(top_users):
-        display_name = ""
-        if user.id == user_id:
-            display_name = user.first_name or user.username or "Tú"
-            display_name = display_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
-        else:
-            if user.username:
-                display_name = f"@{user.username[0]}\*****"
-            elif user.first_name:
-                display_name = f"{user.first_name[0]}\*****"
-            else:
-                display_name = "Usuario Anónimo"
-
-        ranking_text += f"`{offset + i + 1}.` {display_name} - `{user.points}` puntos (Nivel `{user.level}`)\n"
-
-    await message.answer(ranking_text, reply_markup=get_ranking_keyboard(offset, total_users), parse_mode="Markdown")
-
-
-@router.callback_query(F.data.startswith("ranking_nav_"))
-async def navigate_ranking(callback: CallbackQuery, session: AsyncSession):
-    user_id = callback.from_user.id
-    offset = int(callback.data.split("_")[2])
-
-    total_users_stmt = select(func.count(User.id))
-    total_users_result = await session.execute(total_users_stmt)
-    total_users = total_users_result.scalar_one()
-
-    stmt = select(User).order_by(User.points.desc(), User.id.asc()).offset(offset).limit(10)
-    result = await session.execute(stmt)
-    top_users = result.scalars().all()
-
-    if not top_users:
-        await callback.message.edit_text("Aún no hay usuarios en el ranking. ¡Sé el primero en la cima! 🚀", reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
-        await callback.answer()
-        return
-
-    ranking_text = "🏆 **Ranking de Usuarios:**\n\n"
-    for i, user in enumerate(top_users):
-        display_name = ""
-        if user.id == user_id:
-
-
-@router.message(F.text == "🏆 Ranking")
-@router.message(Command("ranking"))
-async def show_ranking(message: Message, session: AsyncSession):
-    user_id = message.from_user.id
-    offset = 0
-
-    total_users_stmt = select(func.count(User.id))
-    total_users_result = await session.execute(total_users_stmt)
-    total_users = total_users_result.scalar_one()
-
-    stmt = select(User).order_by(User.points.desc(), User.id.asc()).offset(offset).limit(10)
-    result = await session.execute(stmt)
-    top_users = result.scalars().all()
-
-    if not top_users:
-        await message.answer("Aún no hay usuarios en el ranking. ¡Sé el primero en la cima! 🚀", reply_markup=get_ranking_keyboard(), parse_mode="Markdown")
-        return
-
     ranking_text = "🏆 **Ranking de Usuarios (Top 10):**\n\n" # Mantenemos el doble salto para el título
 
     # Nuevo formato para cada entrada del ranking
@@ -410,9 +349,9 @@ async def show_ranking(message: Message, session: AsyncSession):
             display_name = display_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
         else:
             if user.username:
-                display_name = f"@{user.username[0]}\*****"
+                display_name = f"@{user.username[0]}\\*****" # <-- CAMBIO CLAVE AQUÍ: Doble backslash para escapar el asterisco
             elif user.first_name:
-                display_name = f"{user.first_name[0]}\*****"
+                display_name = f"{user.first_name[0]}\\*****" # <-- CAMBIO CLAVE AQUÍ: Doble backslash para escapar el asterisco
             else:
                 display_name = "Usuario Anónimo"
 
@@ -420,7 +359,7 @@ async def show_ranking(message: Message, session: AsyncSession):
         ranking_entries.append(
             f"`#{offset + i + 1}.` {display_name} (`{user.points}` Pts, Nv. `{user.level}`)"
         )
-    
+
     ranking_text += "\n".join(ranking_entries) # Unir las entradas con un solo salto de línea
 
     await message.answer(ranking_text, reply_markup=get_ranking_keyboard(offset, total_users), parse_mode="Markdown")
@@ -455,9 +394,9 @@ async def navigate_ranking(callback: CallbackQuery, session: AsyncSession):
             display_name = display_name.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
         else:
             if user.username:
-                display_name = f"@{user.username[0]}\*****"
+                display_name = f"@{user.username[0]}\\*****" # <-- CAMBIO CLAVE AQUÍ: Doble backslash para escapar el asterisco
             elif user.first_name:
-                display_name = f"{user.first_name[0]}\*****"
+                display_name = f"{user.first_name[0]}\\*****" # <-- CAMBIO CLAVE AQUÍ: Doble backslash para escapar el asterisco
             else:
                 display_name = "Usuario Anónimo"
 
@@ -465,7 +404,7 @@ async def navigate_ranking(callback: CallbackQuery, session: AsyncSession):
         ranking_entries.append(
             f"`#{offset + i + 1}.` {display_name} (`{user.points}` Pts, Nv. `{user.level}`)"
         )
-    
+
     ranking_text += "\n".join(ranking_entries) # Unir las entradas con un solo salto de línea
 
     await callback.message.edit_text(ranking_text, reply_markup=get_ranking_keyboard(offset, total_users), parse_mode="Markdown")
@@ -489,4 +428,4 @@ async def back_to_main_menu(callback: CallbackQuery, session: AsyncSession):
     menu_message = "¡Has regresado al menú principal! Aquí puedes navegar por las opciones principales de la comunidad VIP."
     await callback.message.answer(menu_message, reply_markup=get_main_menu_keyboard(), parse_mode="Markdown")
     await callback.answer()
-
+    
