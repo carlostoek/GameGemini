@@ -2,23 +2,27 @@
 from database.models import User, Mission, Reward
 from services.level_service import get_level_threshold, LEVEL_THRESHOLDS
 from services.achievement_service import ACHIEVEMENTS
+from utils.messages import BOT_MESSAGES # <--- NUEVA IMPORTACIÓN
 
 async def get_profile_message(user: User, active_missions: list[Mission]) -> str:
     points_to_next_level_text = ""
     next_level_threshold = get_level_threshold(user.level + 1)
     if next_level_threshold != float('inf'):
         points_needed = next_level_threshold - user.points
-        points_to_next_level_text = (
-            f"📈 **Puntos para el siguiente nivel ({user.level + 1}):** "
-            f"`{points_needed}` (Total requerido: `{next_level_threshold}` puntos)"
+        # Usar el mensaje personalizado para puntos al siguiente nivel
+        points_to_next_level_text = BOT_MESSAGES["profile_points_to_next_level"].format(
+            points_needed=points_needed,
+            next_level=user.level + 1,
+            next_level_threshold=next_level_threshold
         )
     else:
-        points_to_next_level_text = "✨ **¡Has alcanzado el nivel máximo!**"
+        # Usar el mensaje personalizado para nivel máximo
+        points_to_next_level_text = BOT_MESSAGES["profile_max_level"]
 
 
-    achievements_text = "No tienes logros aún. ¡Sigue interactuando para desbloquearlos! 🚀"
+    # Usar el mensaje personalizado para no logros
+    achievements_text = BOT_MESSAGES["profile_no_achievements"]
     if user.achievements:
-        # Get actual achievement names and icons, sorted by granted date
         granted_achievements_list = []
         for ach_id, timestamp_str in user.achievements.items():
             if ach_id in ACHIEVEMENTS:
@@ -28,47 +32,51 @@ async def get_profile_message(user: User, active_missions: list[Mission]) -> str
                     "icon": ACHIEVEMENTS[ach_id]['icon'],
                     "granted_at": timestamp_str
                 })
-        # Sort by granted_at (most recent first)
-        granted_achievements_list.sort(key=lambda x: datetime.datetime.fromisoformat(x['granted_at']), reverse=True)
+        granted_achievements_list.sort(key=lambda x: x['granted_at'], reverse=True)
 
+        # Formato de logros con el título personalizado
         achievements_formatted = [f"{ach['icon']} `{ach['name']}`" for ach in granted_achievements_list]
-        achievements_text = "\n".join(achievements_formatted)
+        achievements_text = BOT_MESSAGES["profile_achievements_title"] + "\n" + "\n".join(achievements_formatted)
 
 
-    missions_text = "No tienes misiones activas. ¡Revisa la sección 'Misiones' para nuevas oportunidades! 🎯"
+    # Usar el mensaje personalizado para no misiones activas
+    missions_text = BOT_MESSAGES["profile_no_active_missions"]
     if active_missions:
         missions_list = [f"- **{mission.name}** (`{mission.points_reward}` Pts)" for mission in active_missions]
-        missions_text = "\n".join(missions_list)
-
-    # --- CAMBIO DE ANONIMIZACIÓN AQUÍ ---
-    # Usar el username si está disponible, de lo contrario, una descripción genérica
-    user_display_name = user.username or "Usuario VIP"
+        # Usar el título personalizado para misiones activas
+        missions_text = BOT_MESSAGES["profile_active_missions_title"] + "\n" + "\n".join(missions_list)
 
     return (
-        f"👤 **Tu Perfil de Gamificación, {user_display_name}**\n\n" # Usar username o genérico
-        f"✨ **Puntos Acumulados:** `{user.points}`\n"
-        f"🌟 **Nivel Actual:** `{user.level}`\n"
-        f"{points_to_next_level_text}\n"
-        f"🏆 **Logros Desbloqueados:**\n{achievements_text}\n\n"
-        f"🎯 **Misiones Activas:**\n{missions_text}"
+        # Usar mensajes personalizados para cada parte del perfil
+        f"{BOT_MESSAGES['profile_title']}\n\n"
+        f"{BOT_MESSAGES['profile_points'].format(user_points=user.points)}\n"
+        f"{BOT_MESSAGES['profile_level'].format(user_level=user.level)}\n"
+        f"{points_to_next_level_text}\n\n"
+        f"{achievements_text}\n\n" # Incluye el título de logros
+        f"{missions_text}" # Incluye el título de misiones
     )
 
 async def get_mission_details_message(mission: Mission) -> str:
-    return (
-        f"🎯 **Misión: {mission.name}**\n\n"
-        f"📝 **Descripción:** {mission.description}\n"
-        f"💰 **Recompensa:** `{mission.points_reward}` puntos\n"
-        f"⏰ **Tipo:** `{mission.type.capitalize()}`"
+    # Usar el mensaje personalizado para detalles de misión
+    return BOT_MESSAGES["mission_details_text"].format(
+        mission_name=mission.name,
+        mission_description=mission.description,
+        points_reward=mission.points_reward,
+        mission_type=mission.type.capitalize()
     )
 
 async def get_reward_details_message(reward: Reward, user_points: int) -> str:
-    stock_info = f"📦 **Stock:** {'Ilimitado' if reward.stock == -1 else reward.stock}"
-    can_afford = "✅ Puedes canjear esta recompensa." if user_points >= reward.cost else "❌ Puntos insuficientes para canjear."
-    return (
-        f"🛍️ **Recompensa: {reward.name}**\n\n"
-        f"📝 **Descripción:** {reward.description}\n"
-        f"💰 **Costo:** `{reward.cost}` puntos\n"
-        f"{stock_info}\n\n"
-        f"{can_afford}"
-    )
+    stock_info = ""
+    if reward.stock != -1:
+        stock_info = BOT_MESSAGES["reward_details_stock_info"].format(stock_left=reward.stock)
+    else:
+        stock_info = BOT_MESSAGES["reward_details_no_stock_info"]
 
+    # Usar el mensaje personalizado para detalles de recompensa
+    return BOT_MESSAGES["reward_details_text"].format(
+        reward_name=reward.name,
+        reward_description=reward.description,
+        reward_cost=reward.cost,
+        stock_info=stock_info
+    )
+    
