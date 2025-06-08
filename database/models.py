@@ -59,3 +59,20 @@ class Event(Base):
     start_time = Column(DateTime)
     end_time = Column(DateTime)
     is_active = Column(Boolean, default=True)
+class Mission(Base):
+    __tablename__ = 'missions'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    description = Column(String)
+    type = Column(String)  # 'diaria', 'semanal', 'colaborativa', etc.
+    start_time = Column(DateTime, nullable=True)
+    end_time = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+class Reward(Base):
+    __tablename__ = 'rewards'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    description = Column(String)
+    cost_in_points = Column(Integer)
+    is_active = Column(Boolean, default=True)
