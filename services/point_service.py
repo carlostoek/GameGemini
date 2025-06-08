@@ -1,17 +1,17 @@
 # services/point_service.py
 
 import datetime
-from sqlalchemy import select, update, func
+from sqlalchemy import select, func
 from database.models import User, PointLog
 from services.level_service import get_level_by_points
 from services.achievement_service import check_and_award_achievements
 
-# --- CONFIGURACIÓN DE LÍMITES ---
-DAILY_LIMIT = 20  # Máx. puntos por día (personalizable)
-WEEKLY_LIMIT = 120  # Máx. puntos por semana (personalizable)
+# Límites configurables
+DAILY_LIMIT = 20      # Máximo de puntos por día por interacción
+WEEKLY_LIMIT = 120    # Máximo por semana
 
-BONUS_WEEKLY_STREAK = [0, 11, 12, 13, 14, 15]  # +10...+15 por racha semanal
-BONUS_MONTHLY = 50  # Bonus por cada mes
+BONUS_WEEKLY_STREAK = [0, 11, 12, 13, 14, 15]  # Para rachas semanales (puedes ajustar)
+BONUS_MONTHLY = 50
 BONUS_6MONTHS = 100
 BONUS_1YEAR = 200
 
@@ -54,7 +54,7 @@ async def add_points(session, user_id, points, action_type="interaction", descri
     if not forced:
         allowed, allowed_points = await can_receive_points(session, user_id, points, action_type)
         if not allowed:
-            return False, f"Limite diario/semanal alcanzado. Solo puedes recibir {allowed_points} puntos más hoy."
+            return False, f"Límite diario/semanal alcanzado. Solo puedes recibir {allowed_points} puntos más hoy."
         points = allowed_points if allowed_points < points else points
 
     user = await session.get(User, user_id)
