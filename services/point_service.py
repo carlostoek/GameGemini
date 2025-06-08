@@ -1,146 +1,42 @@
-# services/point_service.py
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+from database.models import User
+import logging
 
-import datetime
-from sqlalchemy import select, func
-from database.models import User, PointLog
-from services.level_service import get_level_by_points
-from services.achievement_service import check_and_award_achievements
+logger = logging.getLogger(__name__)
 
-# Límites configurables
-DAILY_LIMIT = 20      # Máximo de puntos por día por interacción
-WEEKLY_LIMIT = 120    # Máximo por semana
+class PointService:
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-BONUS_WEEKLY_STREAK = [0, 11, 12, 13, 14, 15]  # Para rachas semanales (puedes ajustar)
-BONUS_MONTHLY = 50
-BONUS_6MONTHS = 100
-BONUS_1YEAR = 200
+    async def add_points(self, user_id: int, points: int) -> User:
+        user = await self.session.get(User, user_id)
+        if not user:
+            # If user somehow doesn't exist, create a placeholder.
+            # In a real bot, user should be created on /start.
+            logger.warning(f"Attempted to add points to non-existent user {user_id}. Creating new user.")
+            user = User(id=user_id, points=0) # Initialize with 0 points
+            self.session.add(user)
+            await self.session.commit()
+            await self.session.refresh(user)
 
-async def get_today():
-    return datetime.datetime.now().date()
+        user.points += points
+        await self.session.commit()
+        await self.session.refresh(user)
+        logger.info(f"User {user_id} gained {points} points. Total: {user.points}")
+        return user
 
-async def can_receive_points(session, user_id, points, action_type="interaction"):
-    today = await get_today()
-    week_start = today - datetime.timedelta(days=today.weekday())
-    # Total diario
-    result = await session.execute(
-        select(func.sum(PointLog.points)).where(
-            PointLog.user_id == user_id,
-            PointLog.action_type == action_type,
-            func.date(PointLog.timestamp) == today
-        )
-    )
-    day_total = result.scalar() or 0
-    if day_total + points > DAILY_LIMIT:
-        return False, DAILY_LIMIT - day_total
-    # Total semanal
-    result = await session.execute(
-        select(func.sum(PointLog.points)).where(
-            PointLog.user_id == user_id,
-            PointLog.action_type == action_type,
-            func.date(PointLog.timestamp) >= week_start,
-            func.date(PointLog.timestamp) <= today
-        )
-    )
-    week_total = result.scalar() or 0
-    if week_total + points > WEEKLY_LIMIT:
-        return False, WEEKLY_LIMIT - week_total
-    return True, points
+    async def deduct_points(self, user_id: int, points: int) -> User | None:
+        user = await self.session.get(User, user_id)
+        if user and user.points >= points:
+            user.points -= points
+            await self.session.commit()
+            await self.session.refresh(user)
+            logger.info(f"User {user_id} lost {points} points. Total: {user.points}")
+            return user
+        logger.warning(f"Failed to deduct {points} points from user {user_id}. Not enough points or user not found.")
+        return None
 
-async def add_points(session, user_id, points, action_type="interaction", description=None, forced=False):
-    """
-    Asigna puntos a un usuario, respetando límites diarios/semanales.
-    forced=True ignora límites (para compras/admin).
-    """
-    if not forced:
-        allowed, allowed_points = await can_receive_points(session, user_id, points, action_type)
-        if not allowed:
-            return False, f"Límite diario/semanal alcanzado. Solo puedes recibir {allowed_points} puntos más hoy."
-        points = allowed_points if allowed_points < points else points
-
-    user = await session.get(User, user_id)
-    if not user:
-        return False, "Usuario no encontrado."
-
-    user.points += points
-
-    # Registrar log
-    log = PointLog(
-        user_id=user_id,
-        points=points,
-        action_type=action_type,
-        description=description,
-        timestamp=datetime.datetime.now()
-    )
-    session.add(log)
-    await session.commit()
-
-    # Actualizar nivel
-    new_level = await get_level_by_points(user.points)
-    if user.level != new_level:
-        user.level = new_level
-        await session.commit()
-
-    # Check logros/insignias
-    await check_and_award_achievements(session, user)
-
-    return True, f"¡Has recibido {points} puntos! Total: {user.points}"
-
-# --- Bonificaciones por racha y permanencia ---
-
-async def award_weekly_bonus(session, user):
-    streak = user.weekly_streak or 1
-    bonus = BONUS_WEEKLY_STREAK[min(streak, len(BONUS_WEEKLY_STREAK)-1)]
-    user.points += bonus
-    user.weekly_streak = streak + 1 if streak < 5 else 1
-    session.add(PointLog(
-        user_id=user.id,
-        points=bonus,
-        action_type="streak_bonus",
-        description=f"Bonus por racha semanal {streak}",
-        timestamp=datetime.datetime.now()
-    ))
-    await session.commit()
-    await check_and_award_achievements(session, user)
-    return bonus
-
-async def award_monthly_bonus(session, user):
-    user.points += BONUS_MONTHLY
-    session.add(PointLog(
-        user_id=user.id,
-        points=BONUS_MONTHLY,
-        action_type="month_bonus",
-        description="Bonus por permanencia mensual",
-        timestamp=datetime.datetime.now()
-    ))
-    await session.commit()
-    await check_and_award_achievements(session, user)
-    return BONUS_MONTHLY
-
-async def award_hito_bonus(session, user, months):
-    # Bonus por 6 meses y 1 año
-    if months >= 12:
-        user.points += BONUS_1YEAR
-        desc = "Bonus por 1 año de permanencia"
-        points = BONUS_1YEAR
-    elif months >= 6:
-        user.points += BONUS_6MONTHS
-        desc = "Bonus por 6 meses de permanencia"
-        points = BONUS_6MONTHS
-    else:
-        return 0
-    session.add(PointLog(
-        user_id=user.id,
-        points=points,
-        action_type="hito_bonus",
-        description=desc,
-        timestamp=datetime.datetime.now()
-    ))
-    await session.commit()
-    await check_and_award_achievements(session, user)
-    return points
-
-# --- Asignación por compras/admin ---
-
-async def add_points_by_admin(session, user_id, points, description="Compra/Admin"):
-    # Ignora límites diarios/semanales
-    return await add_points(session, user_id, points, action_type="purchase", description=description, forced=True)
+    async def get_user_points(self, user_id: int) -> int:
+        user = await self.session.get(User, user_id)
+        return user.points if user else 0

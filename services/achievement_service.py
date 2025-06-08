@@ -1,38 +1,42 @@
-# services/achievement_service.py
-
+from sqlalchemy.ext.asyncio import AsyncSession
+from database.models import User
 import datetime
-from sqlalchemy import select
-from database.models import Achievement
 
-# Lista de logros base (puedes expandir)
-ACHIEVEMENTS = [
-    {"name": "Veterano Íntimo", "condition": lambda user: user.joined_at and (datetime.datetime.now() - user.joined_at).days >= 180},
-    {"name": "Big Spender VIP", "condition": lambda user: user.points >= 500},
-    {"name": "Fan Leal Apasionado", "condition": lambda user: len(user.point_logs) >= 50},
-    # Agrega más logros aquí según sea necesario
-]
+# Definición de logros (ejemplo)
+ACHIEVEMENTS = {
+    "first_mission": {"name": "Primera Misión Completada", "icon": "🏅"},
+    "level_5": {"name": "Maestro Principiante (Nivel 5)", "icon": "⭐"},
+    "daily_streak_3": {"name": "Racha Diaria (3 Días)", "icon": "🔥"}, # Requires scheduling outside
+    "first_purchase": {"name": "Primer Comprador", "icon": "💰"},
+    "trivia_master": {"name": "Experto en Trivias", "icon": "🧠"}, # Requires trivia system
+    "contributor": {"name": "Colaborador Activo", "icon": "🤝"} # Requires more complex engagement
+}
 
-async def check_and_award_achievements(session, user):
-    """
-    Verifica y otorga logros al usuario según condiciones definidas.
-    """
-    for ach in ACHIEVEMENTS:
-        # Checar si ya tiene este logro
-        result = await session.execute(
-            select(Achievement).where(
-                Achievement.user_id == user.id,
-                Achievement.name == ach["name"]
-            )
-        )
-        existing = result.scalar()
-        if not existing and ach["condition"](user):
-            # Otorgar logro
-            new_ach = Achievement(
-                user_id=user.id,
-                name=ach["name"],
-                unlocked_at=datetime.datetime.now()
-            )
-            session.add(new_ach)
-            await session.commit()
-            # Aquí puedes notificar al usuario, si lo deseas (devuelve el nombre del logro)
-            # Por ejemplo: return ach["name"]
+class AchievementService:
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def grant_achievement(self, user_id: int, achievement_id: str) -> bool:
+        user = await self.session.get(User, user_id)
+        if not user:
+            return False
+
+        if achievement_id not in user.achievements:
+            user.achievements[achievement_id] = datetime.datetime.now().isoformat()
+            await self.session.commit()
+            await self.session.refresh(user)
+            return True
+        return False
+
+    async def get_user_achievements(self, user_id: int) -> dict:
+        user = await self.session.get(User, user_id)
+        if not user:
+            return {}
+        granted_achievements = {}
+        for ach_id, timestamp_str in user.achievements.items():
+            if ach_id in ACHIEVEMENTS:
+                # Create a mutable copy of the achievement data
+                ach_data = ACHIEVEMENTS[ach_id].copy()
+                ach_data['granted_at'] = timestamp_str # Store as ISO format string
+                granted_achievements[ach_id] = ach_data
+        return granted_achievements
