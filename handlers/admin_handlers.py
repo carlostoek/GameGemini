@@ -1,444 +1,267 @@
-# handlers/admin_handlers.py - Bloque 1 de 2
-import json
-import csv
-import io
+import logging
+from aiogram import Router, types, F
+from aiogram.filters import Command
+from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from aiogram.fsm.context import FSMContext
+
+from database.models import User, Mission, Reward, Event
+from services.point_service import add_points, deduct_points, get_points, get_point_logs
+from services.level_service import get_level_by_points, get_progress_to_next_level
+from services.achievement_service import check_and_award_achievements
+
+from utils.keyboard_utils import get_admin_menu_keyboard, get_missions_keyboard, get_reward_keyboard
+from utils.message_utils import send_admin_log, send_progress_bar, send_achievements_gallery
+from utils.messages import ADMIN_WELCOME_MESSAGE
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 import datetime
 
-from aiogram import Router, F, Bot # Asegúrate de que Bot esté importado
-from aiogram.types import Message, CallbackQuery, InputFile
-from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, func
-from database.models import User, Reward, Mission, Event
-from services.point_service import PointService
-from services.reward_service import RewardService
-from services.mission_service import MissionService
-from services.level_service import LevelService # Not directly used here, but good to have
-from utils.keyboard_utils import get_admin_main_keyboard, get_main_menu_keyboard, get_reaction_keyboard # <--- NUEVA IMPORTACIÓN
-from config import Config
-import logging # <--- NUEVA IMPORTACIÓN
-
-logger = logging.getLogger(__name__) # <--- NUEVA LÍNEA
-
 router = Router()
+logger = logging.getLogger(__name__)
 
-# FSM States for Admin actions
-class AdminStates(StatesGroup):
-    creating_reward_name = State()
-    creating_reward_description = State()
-    creating_reward_cost = State()
-    creating_reward_stock = State()
+# --- FUNCIONES AUXILIARES ---
+async def get_or_create_user(session: AsyncSession, telegram_id, username=None):
+    result = await session.execute(
+        select(User).where(User.id == int(telegram_id))
+    )
+    user = result.scalar()
+    if not user:
+        user = User(
+            id=int(telegram_id),
+            username=username,
+            created_at=datetime.datetime.now(),
+            updated_at=datetime.datetime.now(),
+            points=0,
+            level=1,
+            is_admin=True
+        )
+        session.add(user)
+        await session.commit()
+    return user
 
-    creating_mission_name = State()
-    creating_mission_description = State()
-    creating_mission_points = State()
-    creating_mission_type = State()
-    creating_mission_requires_action = State()
-    creating_mission_action_data = State()
-
-    activating_event_name = State()
-    activating_event_description = State()
-    activating_event_multiplier = State()
-    activating_event_duration = State() # In hours
-
-    assigning_points_target = State()
-    assigning_points_amount = State()
-
-    # ¡NUEVO ESTADO FSM para enviar mensajes al canal con reacciones!
-    waiting_for_channel_post_text = State()
-
+# --- HANDLERS DE ADMIN ---
 
 @router.message(Command("admin"))
-async def admin_panel(message: Message):
-    if message.from_user.id != Config.ADMIN_ID:
-        await message.answer("Acceso denegado. No eres administrador.")
+async def cmd_admin_panel(message: Message, state: FSMContext, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
         return
-    await message.answer("Bienvenido al panel de administración, Diana.", reply_markup=get_admin_main_keyboard())
-
-
-@router.callback_query(F.data == "admin_create_reward")
-async def admin_start_create_reward(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Ingresa el **nombre** de la recompensa:", parse_mode="Markdown")
-    await state.set_state(AdminStates.creating_reward_name)
-    await callback.answer()
-
-@router.message(AdminStates.creating_reward_name)
-async def admin_process_reward_name(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    await state.update_data(name=message.text)
-    await message.answer("Ingresa la **descripción** de la recompensa:")
-    await state.set_state(AdminStates.creating_reward_description)
-
-@router.message(AdminStates.creating_reward_description)
-async def admin_process_reward_description(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    await state.update_data(description=message.text)
-    await message.answer("Ingresa el **costo** de la recompensa (solo números):")
-    await state.set_state(AdminStates.creating_reward_cost)
-
-@router.message(AdminStates.creating_reward_cost)
-async def admin_process_reward_cost(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    try:
-        cost = int(message.text)
-        await state.update_data(cost=cost)
-        await message.answer("Ingresa el **stock** de la recompensa (-1 para ilimitado, solo números):")
-        await state.set_state(AdminStates.creating_reward_stock)
-    except ValueError:
-        await message.answer("Costo inválido. Por favor, ingresa un número.")
-
-@router.message(AdminStates.creating_reward_stock)
-async def admin_process_reward_stock(message: Message, state: FSMContext, session: AsyncSession):
-    if message.from_user.id != Config.ADMIN_ID: return
-    try:
-        stock = int(message.text)
-        data = await state.get_data()
-        reward_service = RewardService(session)
-        await reward_service.create_reward(data['name'], data['description'], data['cost'], stock)
-        await message.answer("✅ Recompensa creada exitosamente.", reply_markup=get_admin_main_keyboard())
-        await state.clear()
-    except ValueError:
-        await message.answer("Stock inválido. Por favor, ingresa un número.")
-    except Exception as e:
-        await message.answer(f"Error al crear recompensa: `{e}`", parse_mode="Markdown")
-        await state.clear()
-
-
-@router.callback_query(F.data == "admin_create_mission")
-async def admin_start_create_mission(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Ingresa el **nombre** de la misión:")
-    await state.set_state(AdminStates.creating_mission_name)
-    await callback.answer()
-
-@router.message(AdminStates.creating_mission_name)
-async def admin_process_mission_name(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    await state.update_data(name=message.text)
-    await message.answer("Ingresa la **descripción** de la misión:")
-    await state.set_state(AdminStates.creating_mission_description)
-
-@router.message(AdminStates.creating_mission_description)
-async def admin_process_mission_description(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    await state.update_data(description=message.text)
-    await message.answer("Ingresa los **puntos de recompensa** de la misión (solo números):")
-    await state.set_state(AdminStates.creating_mission_points)
-
-@router.message(AdminStates.creating_mission_points)
-async def admin_process_mission_points(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    try:
-        points = int(message.text)
-        await state.update_data(points_reward=points)
-        await message.answer("Ingresa el **tipo** de misión (ej. `daily`, `weekly`, `one_time`, `event`, `reaction`):")
-        await state.set_state(AdminStates.creating_mission_type)
-    except ValueError:
-        await message.answer("Puntos inválidos. Por favor, ingresa un número.")
-
-@router.message(AdminStates.creating_mission_type)
-async def admin_process_mission_type(message: Message, state: FSMContext, session: AsyncSession): # <-- ¡CORRECCIÓN AQUÍ!
-    if message.from_user.id != Config.ADMIN_ID: return
-    mission_type = message.text.lower()
-    valid_types = ['daily', 'weekly', 'one_time', 'event', 'reaction']
-    if mission_type not in valid_types:
-        await message.answer(f"Tipo de misión inválido. Por favor, elige entre: {', '.join(valid_types)}")
-        return
-    await state.update_data(type=mission_type)
-
-    if mission_type == 'reaction': # Reaction missions implicitly require action (clicking a button)
-        await state.update_data(requires_action=True)
-        # For reaction missions, action_data might specify which button/reaction type to look for,
-        # but for now, we'll keep it simple and just mark that it requires action.
-        await state.update_data(action_data={}) # No specific action_data needed for now, but keep as dict
-        data = await state.get_data()
-        mission_service = MissionService(session) # <-- ¡CORRECCIÓN AQUÍ!
-        await mission_service.create_mission(
-            data['name'], data['description'], data['points_reward'], data['type'],
-            data['requires_action'], data.get('action_data')
-        )
-        await message.answer("✅ Misión de reacción creada exitosamente.", reply_markup=get_admin_main_keyboard())
-        await state.clear()
-    else: # For other mission types, ask about requires_action
-        await message.answer("¿Requiere una acción externa para completarse? (Sí/No):")
-        await state.set_state(AdminStates.creating_mission_requires_action)
-        # handlers/admin_handlers.py - Bloque 2 de 2 (continuación)
-
-@router.message(AdminStates.creating_mission_requires_action)
-async def admin_process_mission_requires_action(message: Message, state: FSMContext, session: AsyncSession):
-    if message.from_user.id != Config.ADMIN_ID: return
-    requires_action_text = message.text.lower()
-    requires_action = requires_action_text == 'sí' or requires_action_text == 'si'
-    await state.update_data(requires_action=requires_action)
-
-    data = await state.get_data()
-    mission_service = MissionService(session)
-    await mission_service.create_mission(
-        data['name'], data['description'], data['points_reward'], data['type'],
-        data['requires_action'], data.get('action_data')
+    await message.answer(
+        ADMIN_WELCOME_MESSAGE,
+        reply_markup=get_admin_menu_keyboard()
     )
-    await message.answer("✅ Misión creada exitosamente.", reply_markup=get_admin_main_keyboard())
-    await state.clear()
 
-
-@router.callback_query(F.data == "admin_export_data")
-async def admin_export_data(callback: CallbackQuery, session: AsyncSession):
-    if callback.from_user.id != Config.ADMIN_ID: return
-
+@router.message(Command("sumarpuntos"))
+async def cmd_sumarpuntos(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
     try:
-        users_stmt = select(User)
-        users_result = await session.execute(users_stmt)
-        users = users_result.scalars().all()
+        _, target_id, puntos = message.text.split()
+        target_user = await get_or_create_user(session, target_id)
+        puntos = int(puntos)
+    except Exception:
+        await message.answer("Uso: /sumarpuntos <telegram_id> <puntos>")
+        return
 
-        if not users:
-            await callback.answer("No hay datos de usuarios para exportar.", show_alert=True)
-            return
+    await add_points(session, target_user.id, puntos, action_type="admin", description="Admin manual")
+    await message.answer(f"Se sumaron {puntos} puntos a {target_user.username or target_user.id}.")
+    await send_admin_log(session, user, f"Sumó {puntos} puntos a {target_user.username or target_user.id}")
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-
-        # Encabezados
-        writer.writerow(['ID', 'Username', 'First Name', 'Last Name', 'Points', 'Level', 'Achievements', 'Missions Completed', 'Last Daily Mission Reset', 'Last Weekly Mission Reset', 'Channel Reactions', 'Created At', 'Updated At'])
-
-        # Datos de usuarios
-        for user in users:
-            writer.writerow([
-                user.id,
-                user.username,
-                user.first_name,
-                user.last_name,
-                user.points,
-                user.level,
-                json.dumps(user.achievements), # Convertir dict a string JSON
-                json.dumps(user.missions_completed), # Convertir dict a string JSON
-                user.last_daily_mission_reset.isoformat() if user.last_daily_mission_reset else '',
-                user.last_weekly_mission_reset.isoformat() if user.last_weekly_mission_reset else '',
-                json.dumps(user.channel_reactions) if user.channel_reactions else '{}', # Nuevo campo
-                user.created_at.isoformat() if user.created_at else '',
-                user.updated_at.isoformat() if user.updated_at else ''
-            ])
-
-        output.seek(0)
-        await callback.message.answer_document(InputFile(io.BytesIO(output.getvalue().encode('utf-8')), filename="users_data.csv"))
-        await callback.answer("Datos exportados exitosamente.", show_alert=True)
-    except Exception as e:
-        logger.error(f"Error exporting data: {e}")
-        await callback.answer(f"Error al exportar datos: {e}", show_alert=True)
-
-
-@router.callback_query(F.data == "admin_reset_season")
-async def admin_confirm_reset_season(callback: CallbackQuery):
-    if callback.from_user.id != Config.ADMIN_ID: return
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Confirmar Reseteo (¡IRREVERSIBLE!)", callback_data="admin_perform_reset_season")],
-        [InlineKeyboardButton(text="❌ Cancelar", callback_data="admin_cancel_reset_season")]
-    ])
-    await callback.message.edit_text("⚠️ **Advertencia: Esto reseteará todos los puntos y logros de TODOS los usuarios.**\n\n¿Estás seguro?", reply_markup=keyboard, parse_mode="Markdown")
-    await callback.answer()
-
-@router.callback_query(F.data == "admin_perform_reset_season")
-async def admin_perform_reset_season(callback: CallbackQuery, session: AsyncSession):
-    if callback.from_user.id != Config.ADMIN_ID: return
+@router.message(Command("restapuntos"))
+async def cmd_restapuntos(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
     try:
-        stmt = update(User).values(points=0, level=1, achievements={}, missions_completed={}, channel_reactions={}) # Reset channel_reactions too
-        await session.execute(stmt)
+        _, target_id, puntos = message.text.split()
+        target_user = await get_or_create_user(session, target_id)
+        puntos = int(puntos)
+    except Exception:
+        await message.answer("Uso: /restapuntos <telegram_id> <puntos>")
+        return
+
+    await deduct_points(session, target_user.id, puntos, action_type="admin_deduct", description="Admin manual")
+    await message.answer(f"Se restaron {puntos} puntos a {target_user.username or target_user.id}.")
+    await send_admin_log(session, user, f"Restó {puntos} puntos a {target_user.username or target_user.id}")
+
+@router.message(Command("forzarnivel"))
+async def cmd_forzarnivel(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
+    try:
+        _, target_id, nuevo_nivel = message.text.split(maxsplit=2)
+        target_user = await get_or_create_user(session, target_id)
+        target_user.level = nuevo_nivel
         await session.commit()
-        await callback.message.edit_text("✅ ¡Temporada reseteada exitosamente! Todos los puntos, niveles, logros y misiones completadas han sido reiniciados.")
-        await callback.answer()
-    except Exception as e:
-        await callback.message.edit_text(f"❌ Error al resetear la temporada: {e}")
-        await callback.answer()
+    except Exception:
+        await message.answer("Uso: /forzarnivel <telegram_id> <nivel>")
+        return
+    await message.answer(f"Nivel de {target_user.username or target_user.id} actualizado a {nuevo_nivel}.")
+    await send_admin_log(session, user, f"Forzó nivel {nuevo_nivel} a {target_user.username or target_user.id}")
 
-@router.callback_query(F.data == "admin_cancel_reset_season")
-async def admin_cancel_reset_season(callback: CallbackQuery):
-    if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Reseteo de temporada cancelado.", reply_markup=get_admin_main_keyboard())
-    await callback.answer()
-
-@router.callback_query(F.data == "admin_assign_points")
-async def admin_start_assign_points(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Ingresa el ID de usuario o el username (con @) al que quieres asignar puntos:")
-    await state.set_state(AdminStates.assigning_points_target)
-    await callback.answer()
-
-@router.message(AdminStates.assigning_points_target)
-async def admin_process_assign_points_target(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    target_user_identifier = message.text.strip()
-    await state.update_data(target_user_identifier=target_user_identifier)
-    await message.answer(f"Ingresa la cantidad de puntos a asignar a `{target_user_identifier}` (puede ser negativo para restar):", parse_mode="Markdown")
-    await state.set_state(AdminStates.assigning_points_amount)
-
-@router.message(AdminStates.assigning_points_amount)
-async def admin_process_assign_points_amount(message: Message, state: FSMContext, session: AsyncSession):
-    if message.from_user.id != Config.ADMIN_ID: return
+# ...continúa en el siguiente bloque
+# --- Handler para crear misiones ---
+@router.message(Command("crearmision"))
+async def cmd_crearmision(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
     try:
-        points_to_add = int(message.text)
-        data = await state.get_data()
-        user_identifier = data['target_user_identifier']
-
-        user = None
-        if user_identifier.isdigit(): # Try to find by ID
-            user = await session.get(User, int(user_identifier))
-        elif user_identifier.startswith('@'): # Try to find by username
-            stmt = select(User).where(User.username == user_identifier[1:])
-            result = await session.execute(stmt)
-            user = result.scalar_one_or_none()
-
-        if not user:
-            await message.answer("Usuario no encontrado. Asegúrate de que el ID/username sea correcto y que el usuario haya interactuado con el bot al menos una vez.")
-            await state.clear()
-            return
-
-        point_service = PointService(session)
-        updated_user = await point_service.add_points(user.id, points_to_add) # Usamos add_points que maneja positivos/negativos
-        await message.answer(f"✅ Se han asignado `{points_to_add}` puntos a `{updated_user.first_name or updated_user.username}`. Ahora tiene `{updated_user.points}` puntos.", parse_mode="Markdown")
-        await state.clear()
-    except ValueError:
-        await message.answer("Cantidad de puntos inválida. Por favor, ingresa un número.")
-    except Exception as e:
-        await message.answer(f"Error al asignar puntos: `{e}`", parse_mode="Markdown")
-        await state.clear()
-
-
-@router.callback_query(F.data == "admin_activate_event")
-async def admin_start_activate_event(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Ingresa el **nombre** del evento:")
-    await state.set_state(AdminStates.activating_event_name)
-    await callback.answer()
-
-@router.message(AdminStates.activating_event_name)
-async def admin_process_event_name(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    await state.update_data(name=message.text)
-    await message.answer("Ingresa la **descripción** del evento:")
-    await state.set_state(AdminStates.activating_event_description)
-
-@router.message(AdminStates.activating_event_description)
-async def admin_process_event_description(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    await state.update_data(description=message.text)
-    await message.answer("Ingresa el **multiplicador** de puntos del evento (ej. 2 para doble puntos, solo números):")
-    await state.set_state(AdminStates.activating_event_multiplier)
-
-@router.message(AdminStates.activating_event_multiplier)
-async def admin_process_event_multiplier(message: Message, state: FSMContext):
-    if message.from_user.id != Config.ADMIN_ID: return
-    try:
-        multiplier = int(message.text)
-        if multiplier < 1:
-            await message.answer("El multiplicador debe ser al menos 1.")
-            return
-        await state.update_data(multiplier=multiplier)
-        await message.answer("Ingresa la **duración** del evento en horas (0 para indefinido):")
-        await state.set_state(AdminStates.activating_event_duration)
-    except ValueError:
-        await message.answer("Multiplicador inválido. Por favor, ingresa un número.")
-
-@router.message(AdminStates.activating_event_duration)
-async def admin_process_event_duration(message: Message, state: FSMContext, session: AsyncSession):
-    if message.from_user.id != Config.ADMIN_ID: return
-    try:
-        duration_hours = int(message.text)
-        data = await state.get_data()
-
-        start_time = datetime.datetime.now()
-        end_time = None
-        if duration_hours > 0:
-            end_time = start_time + datetime.timedelta(hours=duration_hours)
-
-        new_event = Event(
-            name=data['name'],
-            description=data['description'],
-            multiplier=data['multiplier'],
-            is_active=True,
-            start_time=start_time,
-            end_time=end_time
+        _, datos = message.text.split(maxsplit=1)
+        nombre, descripcion, tipo = datos.split(";")
+        mission = Mission(
+            name=nombre.strip(),
+            description=descripcion.strip(),
+            type=tipo.strip(),
+            start_time=datetime.datetime.now(),
+            is_active=True
         )
-        session.add(new_event)
+        session.add(mission)
         await session.commit()
-        await session.refresh(new_event)
+    except Exception:
+        await message.answer("Uso: /crearmision <nombre>;<descripcion>;<tipo>")
+        return
+    await message.answer(f"Misión '{nombre}' creada y activada.")
+    await send_admin_log(session, user, f"Creó misión {nombre}")
 
-        # Notificar a los usuarios en el canal principal sobre el evento
-        event_message = (
-            f"📢 **¡Nuevo Evento Activo: {new_event.name}!**\n\n"
-            f"{new_event.description}\n\n"
-            f"Todos los puntos ganados se multiplicarán por **{new_event.multiplier}x**.\n"
-        )
-        if new_event.end_time:
-            event_message += f"¡El evento finalizará el `{new_event.end_time.strftime('%d/%m/%Y %H:%M')}`!"
+# --- Handler para activar/desactivar misiones ---
+@router.message(Command("activarmision"))
+async def cmd_activarmision(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
+    try:
+        _, mission_id, action = message.text.split()
+        mission = await session.get(Mission, int(mission_id))
+        if not mission:
+            await message.answer("Misión no encontrada.")
+            return
+        if action.lower() == "on":
+            mission.is_active = True
+        elif action.lower() == "off":
+            mission.is_active = False
         else:
-            event_message += "¡Este evento es indefinido!"
+            await message.answer("Acción inválida. Usa on/off.")
+            return
+        await session.commit()
+    except Exception:
+        await message.answer("Uso: /activarmision <id> <on/off>")
+        return
+    await message.answer(f"Misión {mission.name} ahora {'activa' if mission.is_active else 'inactiva'}.")
+    await send_admin_log(session, user, f"Cambió estado de misión {mission.name} a {action}")
 
-        # Enviar al canal
-        await message.bot.send_message(Config.CHANNEL_ID, event_message, parse_mode="Markdown")
-
-        await message.answer("✅ Evento activado y publicado en el canal exitosamente.", reply_markup=get_admin_main_keyboard())
-        await state.clear()
-    except ValueError:
-        await message.answer("Duración inválida. Por favor, ingresa un número de horas.")
-    except Exception as e:
-        logger.error(f"Error activating event: {e}")
-        await message.answer(f"Error al activar evento: `{e}`", parse_mode="Markdown")
-        await state.clear()
-
-
-# ¡NUEVOS HANDLERS para enviar mensajes al canal con botones de reacción!
-@router.callback_query(F.data == "admin_send_channel_post_reactions")
-async def admin_start_channel_post_reactions(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text(
-        "Por favor, envía el **texto del mensaje** que quieres publicar en el canal. "
-        "Este mensaje tendrá los botones de reacción configurados debajo.",
-        parse_mode="Markdown"
-    )
-    await state.set_state(AdminStates.waiting_for_channel_post_text)
-    await callback.answer()
-
-@router.message(AdminStates.waiting_for_channel_post_text)
-async def admin_process_channel_post_text(message: Message, state: FSMContext, bot: Bot):
-    if message.from_user.id != Config.ADMIN_ID: return
-    
-    post_text = message.text
-    
+# --- Handler para crear recompensas ---
+@router.message(Command("crearrecompensa"))
+async def cmd_crearrecompensa(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
     try:
-        # Enviar el mensaje al canal
-        sent_message = await bot.send_message(
-            chat_id=Config.CHANNEL_ID,
-            text=post_text,
-            reply_markup=get_reaction_keyboard(message_id=0), # message_id temporal, lo actualizaremos
-            parse_mode="Markdown"
+        _, datos = message.text.split(maxsplit=1)
+        nombre, descripcion, costo = datos.split(";")
+        reward = Reward(
+            name=nombre.strip(),
+            description=descripcion.strip(),
+            cost_in_points=int(costo.strip()),
+            is_active=True
         )
-        
-        # Una vez enviado, obtenemos el message_id real del mensaje en el canal
-        real_message_id = sent_message.message_id
-        
-        # Ahora, editamos el mensaje para poner el message_id correcto en el callback_data
-        # Esto es crucial porque el message_id no se sabe hasta que el mensaje es enviado.
-        updated_keyboard = get_reaction_keyboard(message_id=real_message_id)
-        await bot.edit_message_reply_markup(
-            chat_id=Config.CHANNEL_ID,
-            message_id=real_message_id,
-            reply_markup=updated_keyboard
-        )
+        session.add(reward)
+        await session.commit()
+    except Exception:
+        await message.answer("Uso: /crearrecompensa <nombre>;<descripcion>;<costo>")
+        return
+    await message.answer(f"Recompensa '{nombre}' creada y activada.")
+    await send_admin_log(session, user, f"Creó recompensa {nombre}")
 
-        await message.answer(
-            f"✅ Mensaje publicado en el canal (ID: `{real_message_id}`) con botones de reacción. "
-            "Los usuarios ahora pueden reaccionar a él para ganar puntos.",
-            reply_markup=get_admin_main_keyboard(),
-            parse_mode="Markdown"
-        )
-        logger.info(f"Admin {message.from_user.id} posted message {real_message_id} to channel {Config.CHANNEL_ID} with reaction buttons.")
-        await state.clear()
+# --- Handler para activar/desactivar recompensas ---
+@router.message(Command("activarrecompensa"))
+async def cmd_activarrecompensa(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
+    try:
+        _, reward_id, action = message.text.split()
+        reward = await session.get(Reward, int(reward_id))
+        if not reward:
+            await message.answer("Recompensa no encontrada.")
+            return
+        if action.lower() == "on":
+            reward.is_active = True
+        elif action.lower() == "off":
+            reward.is_active = False
+        else:
+            await message.answer("Acción inválida. Usa on/off.")
+            return
+        await session.commit()
+    except Exception:
+        await message.answer("Uso: /activarrecompensa <id> <on/off>")
+        return
+    await message.answer(f"Recompensa {reward.name} ahora {'activa' if reward.is_active else 'inactiva'}.")
+    await send_admin_log(session, user, f"Cambió estado de recompensa {reward.name} a {action}")
 
-    except Exception as e:
-        logger.error(f"Error sending channel post with reactions: {e}")
-        await message.answer(f"❌ Error al publicar el mensaje en el canal: `{e}`", reply_markup=get_admin_main_keyboard(), parse_mode="Markdown")
-        await state.clear()
-            
+# --- Handler para eventos (crear/activar/desactivar) ---
+@router.message(Command("crearevento"))
+async def cmd_crearevento(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
+    try:
+        _, datos = message.text.split(maxsplit=1)
+        nombre, descripcion, start_str, end_str = datos.split(";")
+        start_time = datetime.datetime.fromisoformat(start_str.strip())
+        end_time = datetime.datetime.fromisoformat(end_str.strip())
+        evento = Event(
+            name=nombre.strip(),
+            description=descripcion.strip(),
+            start_time=start_time,
+            end_time=end_time,
+            is_active=True
+        )
+        session.add(evento)
+        await session.commit()
+    except Exception:
+        await message.answer("Uso: /crearevento <nombre>;<descripcion>;<start>;<end> (formato: YYYY-MM-DDTHH:MM:SS)")
+        return
+    await message.answer(f"Evento '{nombre}' creado y activado.")
+    await send_admin_log(session, user, f"Creó evento {nombre}")
+
+@router.message(Command("activarevento"))
+async def cmd_activarevento(message: Message, session: AsyncSession):
+    user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+    if not getattr(user, "is_admin", False):
+        await message.answer("No tienes permisos para este comando.")
+        return
+    try:
+        _, event_id, action = message.text.split()
+        event = await session.get(Event, int(event_id))
+        if not event:
+            await message.answer("Evento no encontrado.")
+            return
+        if action.lower() == "on":
+            event.is_active = True
+        elif action.lower() == "off":
+            event.is_active = False
+        else:
+            await message.answer("Acción inválida. Usa on/off.")
+            return
+        await session.commit()
+    except Exception:
+        await message.answer("Uso: /activarevento <id> <on/off>")
+        return
+    await message.answer(f"Evento {event.name} ahora {'activo' if event.is_active else 'inactivo'}.")
+    await send_admin_log(session, user, f"Cambió estado de evento {event.name} a {action}")
+
+# --- Fin del archivo ---
