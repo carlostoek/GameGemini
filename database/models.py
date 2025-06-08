@@ -50,3 +50,12 @@ class Achievement(Base):
 # Ejemplo:
 # class Mission(Base): ...
 # class Reward(Base): ...
+
+class Event(Base):
+    __tablename__ = 'events'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    description = Column(String)
+    start_time = Column(DateTime)
+    end_time = Column(DateTime)
+    is_active = Column(Boolean, default=True)
