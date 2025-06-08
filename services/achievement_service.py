@@ -1,57 +1,42 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from database.models import Achievement, User
+from database.models import User
 import datetime
-import logging
 
-logger = logging.getLogger(__name__)
+# Definición de logros (ejemplo)
+ACHIEVEMENTS = {
+    "first_mission": {"name": "Primera Misión Completada", "icon": "🏅"},
+    "level_5": {"name": "Maestro Principiante (Nivel 5)", "icon": "⭐"},
+    "daily_streak_3": {"name": "Racha Diaria (3 Días)", "icon": "🔥"}, # Requires scheduling outside
+    "first_purchase": {"name": "Primer Comprador", "icon": "💰"},
+    "trivia_master": {"name": "Experto en Trivias", "icon": "🧠"}, # Requires trivia system
+    "contributor": {"name": "Colaborador Activo", "icon": "🤝"} # Requires more complex engagement
+}
 
-# Define aquí todos los logros (puedes expandir con lógica dinámica después)
-ACHIEVEMENTS = [
-    {
-        "name": "Veterano Íntimo",
-        "check": lambda user: user.created_at and (datetime.datetime.now() - user.created_at).days >= 180
-    },
-    {
-        "name": "Big Spender VIP",
-        "check": lambda user: user.points >= 500
-    },
-    {
-        "name": "Fan Leal Apasionado",
-        "check": lambda user: hasattr(user, "point_logs") and len(user.point_logs) >= 50
-    },
-    # Agrega aquí más logros según la lógica del reporte
-]
+class AchievementService:
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-async def check_and_award_achievements(session: AsyncSession, user: User):
-    """
-    Checa todos los logros posibles y otorga los que el usuario no tenga.
-    Llama esto cada vez que el usuario gana puntos o realiza una acción clave.
-    """
-    awarded = []
-    for ach in ACHIEVEMENTS:
-        # Checar si ya tiene el logro
-        result = await session.execute(
-            select(Achievement).where(
-                Achievement.user_id == user.id,
-                Achievement.name == ach["name"]
-            )
-        )
-        existing = result.scalar()
-        if not existing and ach["check"](user):
-            new_ach = Achievement(
-                user_id=user.id,
-                name=ach["name"],
-                unlocked_at=datetime.datetime.now()
-            )
-            session.add(new_ach)
-            await session.commit()
-            awarded.append(ach["name"])
-            logger.info(f"Logro otorgado: {ach['name']} al usuario {user.id}")
-    return awarded  # Lista de nombres de logros nuevos, por si quieres notificarlos
+    async def grant_achievement(self, user_id: int, achievement_id: str) -> bool:
+        user = await self.session.get(User, user_id)
+        if not user:
+            return False
 
-async def get_achievements(session: AsyncSession, user_id: int):
-    result = await session.execute(
-        select(Achievement).where(Achievement.user_id == user_id)
-    )
-    return result.scalars().all()
+        if achievement_id not in user.achievements:
+            user.achievements[achievement_id] = datetime.datetime.now().isoformat()
+            await self.session.commit()
+            await self.session.refresh(user)
+            return True
+        return False
+
+    async def get_user_achievements(self, user_id: int) -> dict:
+        user = await self.session.get(User, user_id)
+        if not user:
+            return {}
+        granted_achievements = {}
+        for ach_id, timestamp_str in user.achievements.items():
+            if ach_id in ACHIEVEMENTS:
+                # Create a mutable copy of the achievement data
+                ach_data = ACHIEVEMENTS[ach_id].copy()
+                ach_data['granted_at'] = timestamp_str # Store as ISO format string
+                granted_achievements[ach_id] = ach_data
+        return granted_achievements
