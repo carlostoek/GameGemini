@@ -1,82 +1,68 @@
-import enum from datetime import datetime from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Enum, UniqueConstraint from sqlalchemy.orm import relationship from .setup import Base
+# database/models.py
+from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Boolean, JSON, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.sql import func
+from sqlalchemy.ext.asyncio import AsyncAttrs
 
-class SourceType(enum.Enum): PERMANENCE = "permanence" REACTION = "reaction" PURCHASE = "purchase" MISSION = "mission" ACHIEVEMENT = "achievement"
+Base = declarative_base()
 
-class User(Base): tablename = 'users'
+class User(AsyncAttrs, Base):
+    __tablename__ = "users"
+    id = Column(BigInteger, primary_key=True, unique=True) # Telegram User ID
+    username = Column(String, nullable=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    points = Column(Integer, default=0)
+    level = Column(Integer, default=1)
+    achievements = Column(JSON, default={}) # {'achievement_id': timestamp_isoformat}
+    missions_completed = Column(JSON, default={}) # {'mission_id': timestamp_isoformat}
+    # Track last reset for daily/weekly missions
+    last_daily_mission_reset = Column(DateTime, default=func.now())
+    last_weekly_mission_reset = Column(DateTime, default=func.now())
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # ¡NUEVA COLUMNA para registrar reacciones a mensajes del canal!
+    # Guarda un diccionario donde la clave es el message_id del canal y el valor es un booleano (True)
+    # o el timestamp de la reacción para futura expansión si necesitamos historial.
+    # Por ahora, un simple booleano es suficiente para saber si ya reaccionó.
+    channel_reactions = Column(JSON, default={}) # {'message_id': True, 'message_id_2': True}
 
-id = Column(Integer, primary_key=True)
-telegram_id = Column(String, unique=True, nullable=False)
-username = Column(String, nullable=True)
-join_date = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-points = Column(Integer, default=0)
-level = Column(Integer, default=0)
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}', points={self.points}, level={self.level})>"
 
-purchases = relationship('Purchase', back_populates='user')
-referrals_made = relationship('Referral', foreign_keys='Referral.referrer_id', back_populates='referrer')
-referrals_received = relationship('Referral', foreign_keys='Referral.referred_id', back_populates='referred')
-point_history = relationship('PointHistory', back_populates='user')
-achievements = relationship('Achievement', back_populates='user')
-redemptions = relationship('RedemptionHistory', back_populates='user')
+class Reward(AsyncAttrs, Base):
+    __tablename__ = "rewards"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, unique=True, nullable=False)
+    description = Column(Text)
+    cost = Column(Integer, nullable=False)
+    stock = Column(Integer, default=-1) # -1 for unlimited
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.now())
 
-class Purchase(Base): tablename = 'purchases'
+class Mission(AsyncAttrs, Base):
+    __tablename__ = "missions"
+    id = Column(String, primary_key=True) # Unique ID like 'daily_click_post'
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    points_reward = Column(Integer, nullable=False)
+    type = Column(String, nullable=False) # 'daily', 'weekly', 'one_time', 'event', 'reaction' (NUEVO TIPO)
+    is_active = Column(Boolean, default=True)
+    requires_action = Column(Boolean, default=False) # True if requires a specific button click/action outside the bot's menu
+    # action_data puede ser usado para especificar, por ejemplo, qué 'button_id' de reacción completa la misión
+    action_data = Column(JSON, nullable=True) # e.g., {'button_id': 'like_post_1'} or {'target_message_id': 12345}
+    created_at = Column(DateTime, default=func.now())
 
-id = Column(Integer, primary_key=True)
-user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-amount = Column(Float, nullable=False)
-date = Column(DateTime, default=datetime.utcnow, nullable=False)
-points_awarded = Column(Integer, nullable=False)
-
-user = relationship('User', back_populates='purchases')
-
-class Referral(Base): tablename = 'referrals'
-
-id = Column(Integer, primary_key=True)
-referrer_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-referred_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-date = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-referrer = relationship('User', foreign_keys=[referrer_id], back_populates='referrals_made')
-referred = relationship('User', foreign_keys=[referred_id], back_populates='referrals_received')
-
-__table_args__ = (
-    UniqueConstraint('referrer_id', 'referred_id', name='uq_referral_pair'),
-)
-
-class PointHistory(Base): tablename = 'point_history'
-
-id = Column(Integer, primary_key=True)
-user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-source_type = Column(Enum(SourceType), nullable=False)
-source_id = Column(String, nullable=True)  # e.g., message_id, purchase_id, mission_id
-points = Column(Integer, nullable=False)
-timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-user = relationship('User', back_populates='point_history')
-
-class Achievement(Base): tablename = 'achievements'
-
-id = Column(Integer, primary_key=True)
-user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-name = Column(String, nullable=False)
-date_awarded = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-user = relationship('User', back_populates='achievements')
-
-class Reward(Base): tablename = 'rewards'
-
-id = Column(Integer, primary_key=True)
-name = Column(String, unique=True, nullable=False)
-cost_points = Column(Integer, nullable=False)
-description = Column(String, nullable=True)
-
-class RedemptionHistory(Base): tablename = 'redemption_history'
-
-id = Column(Integer, primary_key=True)
-user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-reward_id = Column(Integer, ForeignKey('rewards.id'), nullable=False)
-date = Column(DateTime, default=datetime.utcnow, nullable=False)
-
-user = relationship('User', back_populates='redemptions')
-reward = relationship('Reward')
-
+class Event(AsyncAttrs, Base):
+    __tablename__ = "events"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    multiplier = Column(Integer, default=1) # e.g., 2 for double points
+    is_active = Column(Boolean, default=True)
+    start_time = Column(DateTime, default=func.now())
+    end_time = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    
