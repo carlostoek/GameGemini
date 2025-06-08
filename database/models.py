@@ -1,68 +1,52 @@
 # database/models.py
-from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Boolean, JSON, Text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.sql import func
-from sqlalchemy.ext.asyncio import AsyncAttrs
+
+from sqlalchemy import (
+    Column, Integer, String, DateTime, Boolean, ForeignKey, func
+)
+from sqlalchemy.orm import declarative_base, relationship
+import datetime
 
 Base = declarative_base()
 
-class User(AsyncAttrs, Base):
-    __tablename__ = "users"
-    id = Column(BigInteger, primary_key=True, unique=True) # Telegram User ID
-    username = Column(String, nullable=True)
-    first_name = Column(String, nullable=True)
-    last_name = Column(String, nullable=True)
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    telegram_id = Column(String, unique=True, index=True)
+    username = Column(String)
+    joined_at = Column(DateTime, default=func.now())
+    last_active = Column(DateTime, default=func.now())
     points = Column(Integer, default=0)
-    level = Column(Integer, default=1)
-    achievements = Column(JSON, default={}) # {'achievement_id': timestamp_isoformat}
-    missions_completed = Column(JSON, default={}) # {'mission_id': timestamp_isoformat}
-    # Track last reset for daily/weekly missions
-    last_daily_mission_reset = Column(DateTime, default=func.now())
-    last_weekly_mission_reset = Column(DateTime, default=func.now())
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
-    # ¡NUEVA COLUMNA para registrar reacciones a mensajes del canal!
-    # Guarda un diccionario donde la clave es el message_id del canal y el valor es un booleano (True)
-    # o el timestamp de la reacción para futura expansión si necesitamos historial.
-    # Por ahora, un simple booleano es suficiente para saber si ya reaccionó.
-    channel_reactions = Column(JSON, default={}) # {'message_id': True, 'message_id_2': True}
+    level = Column(String, default="Suscriptor Íntimo")  # Nivel inicial
+    weekly_streak = Column(Integer, default=0)
+    monthly_streak = Column(Integer, default=0)
+    last_point_date = Column(DateTime)
+    referred_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    is_admin = Column(Boolean, default=False)
 
+    point_logs = relationship('PointLog', back_populates='user')
+    achievements = relationship('Achievement', back_populates='user')
 
-    def __repr__(self):
-        return f"<User(id={self.id}, username='{self.username}', points={self.points}, level={self.level})>"
+class PointLog(Base):
+    __tablename__ = 'point_logs'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    points = Column(Integer)
+    action_type = Column(String)  # 'interaction', 'purchase', 'streak_bonus', etc.
+    description = Column(String, nullable=True)
+    timestamp = Column(DateTime, default=func.now())
 
-class Reward(AsyncAttrs, Base):
-    __tablename__ = "rewards"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, unique=True, nullable=False)
-    description = Column(Text)
-    cost = Column(Integer, nullable=False)
-    stock = Column(Integer, default=-1) # -1 for unlimited
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=func.now())
+    user = relationship('User', back_populates='point_logs')
 
-class Mission(AsyncAttrs, Base):
-    __tablename__ = "missions"
-    id = Column(String, primary_key=True) # Unique ID like 'daily_click_post'
-    name = Column(String, nullable=False)
-    description = Column(Text)
-    points_reward = Column(Integer, nullable=False)
-    type = Column(String, nullable=False) # 'daily', 'weekly', 'one_time', 'event', 'reaction' (NUEVO TIPO)
-    is_active = Column(Boolean, default=True)
-    requires_action = Column(Boolean, default=False) # True if requires a specific button click/action outside the bot's menu
-    # action_data puede ser usado para especificar, por ejemplo, qué 'button_id' de reacción completa la misión
-    action_data = Column(JSON, nullable=True) # e.g., {'button_id': 'like_post_1'} or {'target_message_id': 12345}
-    created_at = Column(DateTime, default=func.now())
+class Achievement(Base):
+    __tablename__ = 'achievements'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'))
+    name = Column(String)
+    unlocked_at = Column(DateTime, default=func.now())
 
-class Event(AsyncAttrs, Base):
-    __tablename__ = "events"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False)
-    description = Column(Text)
-    multiplier = Column(Integer, default=1) # e.g., 2 for double points
-    is_active = Column(Boolean, default=True)
-    start_time = Column(DateTime, default=func.now())
-    end_time = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=func.now())
-    
+    user = relationship('User', back_populates='achievements')
+
+# Puedes agregar aquí otros modelos necesarios para misiones, recompensas, etc.
+# Ejemplo:
+# class Mission(Base): ...
+# class Reward(Base): ...
