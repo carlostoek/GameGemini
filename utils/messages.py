@@ -1,71 +1,72 @@
-from database.models import User, Mission, Reward
-from services.level_service import LEVELS, get_level_by_points, get_progress_to_next_level
-from services.achievement_service import ACHIEVEMENTS
-from utils.messages import BOT_MESSAGES
+BOT_MESSAGES = {
+    "start_welcome_new_user": (
+        "🌙 Bienvenid@ a *El Diván de Diana*…\n\n"
+        "Aquí cada gesto, cada decisión y cada paso que das, suma. Con cada interacción, te adentras más en *El Juego del Diván*.\n\n"
+        "¿Estás list@ para descubrir lo que te espera? Elige por dónde empezar, yo me encargo de hacer que lo disfrutes."
+    ),
+    "start_welcome_returning_user": (
+        "✨ Qué bueno tenerte de regreso.\n\n"
+        "Tu lugar sigue aquí. Tus puntos también... y hay nuevas sorpresas esperándote.\n\n"
+        "¿List@ para continuar *El Juego del Diván*?"
+    ),
+    "profile_not_registered": "Parece que aún no has comenzado tu recorrido. Usa /start para dar tu primer paso.",
+    "profile_title": "🛋️ *Tu rincón en El Diván de Diana*",
+    "profile_points": "📌 *Puntos acumulados:* `{user_points}`",
+    "profile_level": "🎯 *Nivel actual:* `{user_level}`",
+    "profile_points_to_next_level": "📶 *Para el siguiente nivel:* `{points_needed}` más (Nivel `{next_level}` a partir de `{next_level_threshold}`)",
+    "profile_max_level": "🌟 Has llegado al nivel más alto... y se nota. 😉",
+    "profile_achievements_title": "🏅 *Logros desbloqueados*",
+    "profile_no_achievements": "Aún no hay logros. Pero te tengo fe.",
+    "profile_active_missions_title": "📋 *Tus desafíos activos*",
+    "profile_no_active_missions": "Por ahora no hay desafíos, pero eso puede cambiar pronto. Mantente cerca.",
+    "missions_title": "🎯 *Desafíos disponibles*",
+    "missions_no_active": "No hay desafíos por el momento. Aprovecha para tomar aliento.",
+    "mission_not_found": "Ese desafío no existe o ya expiró.",
+    "mission_already_completed": "Ya lo completaste. Buen trabajo.",
+    "mission_completed_success": "✅ ¡Desafío completado! Ganaste `{points_reward}` puntos.",
+    "mission_level_up_bonus": "🚀 Subiste de nivel. Ahora estás en el nivel `{user_level}`. Las cosas se pondrán más interesantes.",
+    "mission_achievement_unlocked": "\n🏆 Logro desbloqueado: *{achievement_name}*",
+    "mission_completion_failed": "❌ No pudimos registrar este desafío. Revisa si ya lo hiciste antes o si aún está activo.",
+    "reward_shop_title": "🎁 *Recompensas del Diván*",
+    "reward_shop_empty": "Por ahora no hay recompensas disponibles. Pero pronto sí. 😉",
+    "reward_not_found": "Esa recompensa ya no está aquí... o aún no está lista.",
+    "reward_not_registered": "Tu perfil no está activo. Usa /start para comenzar *El Juego del Diván*.",
+    "reward_out_of_stock": "Esa recompensa ya se fue. Las cosas buenas no esperan.",
+    "reward_not_enough_points": "Te faltan `{required_points}` puntos. Ahora tienes `{user_points}`. Pero sigue... estás cerca.",
+    "reward_purchase_success": "🎉 ¡Recompensa conseguida! Algo bonito está por llegar.",
+    "reward_purchase_failed": "No pudimos procesar tu elección. Inténtalo más tarde.",
+    "ranking_title": "🏆 *Top 10 del Diván*",
+    "ranking_no_users": "Nadie ha entrado aún al juego... ¿Quieres ser el primero?",
+    "back_to_main_menu": "Has regresado al centro del Diván. Elige por dónde seguir explorando.",
 
-async def get_profile_message(user: User, active_missions: list[Mission]) -> str:
-    progress = get_progress_to_next_level(user.points)
-    if progress["next_level"]:
-        points_to_next_level_text = BOT_MESSAGES["profile_points_to_next_level"].format(
-            points_needed=progress["points_to_next"],
-            next_level=progress["next_level"],
-            next_level_threshold=(
-                next(
-                    (lvl["min_points"] for lvl in LEVELS if lvl["name"] == progress["next_level"]),
-                    "?"
-                )
-            )
-        )
-    else:
-        points_to_next_level_text = BOT_MESSAGES["profile_max_level"]
+    # Botones
+    "profile_achievements_button_text": "🏅 Mis Logros",
+    "profile_active_missions_button_text": "🎯 Mis Desafíos",
+    "back_to_profile_button_text": "← Volver a mi rincón",
+    "view_all_missions_button_text": "Ver todos los desafíos",
+    "back_to_missions_button_text": "← Volver a desafíos",
+    "complete_mission_button_text": "✅ Completado",
+    "confirm_purchase_button_text": "Canjear por `{cost}` puntos",
+    "cancel_purchase_button_text": "❌ Cancelar",
+    "back_to_rewards_button_text": "← Volver a recompensas",
+    "prev_page_button_text": "← Anterior",
+    "next_page_button_text": "Siguiente →",
+    "back_to_main_menu_button_text": "← Volver al inicio",
 
-    achievements_text = BOT_MESSAGES["profile_no_achievements"]
-    if user.achievements:
-        granted_achievements_list = []
-        for ach_id, timestamp_str in user.achievements.items():
-            if ach_id in ACHIEVEMENTS:
-                granted_achievements_list.append({
-                    "id": ach_id,
-                    "name": ACHIEVEMENTS[ach_id]["name"],
-                    "emoji": ACHIEVEMENTS[ach_id].get("emoji", ""),
-                    "date": timestamp_str
-                })
-        if granted_achievements_list:
-            achievements_lines = [
-                f"{a['emoji']} {a['name']} ({a['date']})"
-                for a in granted_achievements_list
-            ]
-            achievements_text = "\n".join(achievements_lines)
-
-    missions_text = ""
-    if active_missions:
-        missions_text = "\n".join([f"• {m.name}: {m.description}" for m in active_missions])
-
-    return (
-        f"👤 *Perfil de usuario*\n"
-        f"Nivel: {progress['current_level']}\n"
-        f"Puntos: {progress['current_points']}\n"
-        f"{points_to_next_level_text}\n"
-        f"🏆 Logros:\n{achievements_text}\n"
-        f"🔥 Misiones activas:\n{missions_text}\n"
-    )
-
-async def send_progress_bar(message, percent):
-    # Ejemplo simple de barra de progreso textual
-    total_slots = 20
-    filled_slots = int(percent / 100 * total_slots)
-    bar = "█" * filled_slots + "░" * (total_slots - filled_slots)
-    await message.answer(f"Progreso: [{bar}] {percent}%")
-
-async def send_achievements_gallery(message, session, user: User):
-    # Simula galería de logros (puedes expandir visualmente)
-    achievements = user.achievements or {}
-    if not achievements:
-        await message.answer("Aún no has desbloqueado logros.")
-        return
-    lines = []
-    for ach_id, timestamp_str in achievements.items():
-        if ach_id in ACHIEVEMENTS:
-            ach = ACHIEVEMENTS[ach_id]
-            lines.append(f"{ach.get('emoji','')} {ach['name']} — {timestamp_str}")
-    await message.answer("🏆 *Logros desbloqueados:*\n" + "\n".join(lines), parse_mode="Markdown")
+    # Detalles
+    "mission_details_text": (
+        "🎯 *Desafío:* {mission_name}\n\n"
+        "📖 *Descripción:* {mission_description}\n"
+        "🎁 *Recompensa:* `{points_reward}` puntos\n"
+        "⏱️ *Frecuencia:* `{mission_type}`"
+    ),
+    "reward_details_text": (
+        "🎁 *Recompensa:* {reward_name}\n\n"
+        "📌 *Descripción:* {reward_description}\n"
+        "💰 *Costo:* `{reward_cost}` puntos\n"
+        "{stock_info}"
+    ),
+    "reward_details_stock_info": "📦 *Disponibles:* `{stock_left}`",
+    "reward_details_no_stock_info": "📦 *Disponibles:* ilimitadas",
+    "reward_details_not_enough_points_alert": "💔 Te faltan puntos para esta recompensa. Necesitas `{required_points}`, tienes `{user_points}`. Sigue sumando, lo estás haciendo bien."
+}
