@@ -102,3 +102,5 @@ def get_reaction_keyboard(message_id: int):
         ]
     ])
     return keyboard
+
+get_rewards_keyboard = get_reward_keyboard
