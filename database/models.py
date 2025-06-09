@@ -1,8 +1,8 @@
-# database/models.py
-from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Boolean, JSON, Text
+# from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Boolean, JSON, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from sqlalchemy.ext.asyncio import AsyncAttrs
+from sqlalchemy.future import select
 
 Base = declarative_base()
 
@@ -66,3 +66,17 @@ class Event(AsyncAttrs, Base):
     end_time = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
     
+# Funciones para manejar el estado del menú del usuario
+async def get_user_menu_state(session, user_id: int) -> str:
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user and user.menu_state:
+        return user.menu_state
+    return "root"
+
+async def set_user_menu_state(session, user_id: int, menu_name: str):
+    result = await session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user:
+        user.menu_state = menu_name
+        await session.commit()
