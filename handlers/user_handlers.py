@@ -64,30 +64,80 @@ async def handle_start(message: Message, session: AsyncSession):
             reply_markup=get_main_menu_keyboard()
         )
     else:
-        await message.answer(
-            f"¡Bienvenido de nuevo, {first_name}! 🎉\n"
-            "Aquí está tu menú principal:",
-            reply_markup=get_main_menu_keyboard()
-        )
+import datetime
+import logging
+from aiogram import Router, F, Bot
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import CommandStart, Command
+from aiogram.fsm.context import FSMContext
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from database.models import User, Mission, Reward, get_user_menu_state, set_user_menu_state
+from services.point_service import PointService
+from services.level_service import LevelService
+from services.achievement_service import AchievementService, ACHIEVEMENTS
+from services.mission_service import MissionService
+from services.reward_service import RewardService
+from utils.keyboard_utils import (
+    get_main_menu_keyboard, get_profile_keyboard, get_missions_keyboard,
+    get_reward_keyboard, get_confirm_purchase_keyboard, get_ranking_keyboard,
+    get_reaction_keyboard,
+    get_root_menu, get_parent_menu, get_child_menu
+)
+
+logger = logging.getLogger(__name__)
+router = Router()
+
+@router.message(CommandStart())
+async def handle_start(message: Message, session: AsyncSession):
+    user_id = message.from_user.id
+    username = message.from_user.username
+    first_name = message.from_user.first_name
+    last_name = message.from_user.last_name
+
+    user = await session.get(User, user_id)
+    if not user:
+        user = User(id=user_id, username=username, first_name=first_name, last_name=last_name)
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        logger.info(f"Nuevo usuario registrado: {user_id} ({username})")
+        await set_user_menu_state(session, user_id, "root")
+    else:
+        await set_user_menu_state(session, user_id, "root")
+
+    await message.answer(
+        f"¡Hola, {first_name}! 👋\n"
+        "Aquí está tu menú principal:",
+        reply_markup=get_main_menu_keyboard()
+    )
 
 @router.callback_query(F.data == "main_menu")
-async def back_to_main_menu(callback: CallbackQuery):
-    await callback.message.edit_text("Aquí está tu menú principal:", reply_markup=get_main_menu_keyboard())
+async def back_to_main_menu(callback: CallbackQuery, session: AsyncSession):
+    user_id = callback.from_user.id
+    await set_user_menu_state(session, user_id, "root")
+    await callback.message.edit_text("Menú principal:", reply_markup=get_main_menu_keyboard())
     await callback.answer()
 
-@router.message(F.text == "👤 Mi Perfil")
-async def show_profile(message: Message, session: AsyncSession):
-    user = await session.get(User, message.from_user.id)
-    if not user:
-        await message.answer("Usuario no encontrado. Por favor, usa /start.")
+@router.callback_query(F.data.startswith("menu:"))
+async def menu_callback_handler(callback: CallbackQuery, session: AsyncSession):
+    user_id = callback.from_user.id
+    current_menu = callback.data.split(":")[1]
+
+    if current_menu == "back":
+        previous = await get_user_menu_state(session, user_id)
+        if previous and previous != "root":
+            await set_user_menu_state(session, user_id, "root")
+            await callback.message.edit_reply_markup(reply_markup=get_parent_menu(previous))
+        else:
+            await set_user_menu_state(session, user_id, "root")
+            await callback.message.edit_reply_markup(reply_markup=get_root_menu())
+        await callback.answer()
         return
 
-    mission_service = MissionService(session)
-    active_missions = await mission_service.get_active_missions(message.from_user.id)
-
-    profile_message = await get_profile_message(user, active_missions)
-    await message.answer(profile_message, parse_mode="Markdown", reply_markup=get_profile_keyboard())
-
+    await set_user_menu_state(session, user_id, current_menu)
+    await callback.message.edit_reply_markup(reply_markup=get_child_menu(current_menu))
+    await callback.answer()
 @router.callback_query(F.data == "profile_achievements")
 async def show_achievements(callback: CallbackQuery, session: AsyncSession):
     user = await session.get(User, callback.from_user.id)
