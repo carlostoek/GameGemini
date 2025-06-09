@@ -13,7 +13,8 @@ def get_main_menu_keyboard():
 
 def get_profile_keyboard():
     keyboard = [
-        [InlineKeyboardButton(text="⬅️ Volver al menú", callback_data="menu:back")]
+        [InlineKeyboardButton(text="⬅️ Volver", callback_data="menu:back")],
+        [InlineKeyboardButton(text="🏠 Menú Principal", callback_data="menu_principal")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -22,6 +23,8 @@ def get_missions_keyboard(missions: list, offset: int = 0):
     keyboard = []
     for mission in missions[offset:offset+5]:
         keyboard.append([InlineKeyboardButton(text=f"{mission.name} ({mission.points_reward} Pts)", callback_data=f"mission_{mission.id}")])
+    keyboard.append([InlineKeyboardButton(text="⬅️ Volver", callback_data="menu:back")])
+    keyboard.append([InlineKeyboardButton(text="🏠 Menú Principal", callback_data="menu_principal")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -29,7 +32,8 @@ def get_reward_keyboard(rewards: list):
     keyboard = []
     for reward in rewards:
         keyboard.append([InlineKeyboardButton(text=f"{reward.name} ({reward.cost} Pts)", callback_data=f"reward_{reward.id}")])
-    keyboard.append([InlineKeyboardButton(text="⬅️ Volver al menú", callback_data="menu:back")])
+    keyboard.append([InlineKeyboardButton(text="⬅️ Volver", callback_data="menu:back")])
+    keyboard.append([InlineKeyboardButton(text="🏠 Menú Principal", callback_data="menu_principal")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
@@ -45,7 +49,8 @@ def get_confirm_purchase_keyboard(reward_id: int):
 
 def get_ranking_keyboard():
     keyboard = [
-        [InlineKeyboardButton(text="⬅️ Volver al menú", callback_data="menu:back")]
+        [InlineKeyboardButton(text="⬅️ Volver", callback_data="menu:back")],
+        [InlineKeyboardButton(text="🏠 Menú Principal", callback_data="menu_principal")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -66,7 +71,7 @@ def get_admin_main_keyboard():
         [InlineKeyboardButton(text="🔄 Resetear Temporada", callback_data="admin_reset_season")],
         [InlineKeyboardButton(text="🎁 Asignar Puntos", callback_data="admin_assign_points")],
         [InlineKeyboardButton(text="📢 Enviar mensaje con reacciones al Canal", callback_data="admin_send_channel_post_reactions")],
-        [InlineKeyboardButton(text="🔙 Menú Principal", callback_data="main_menu")]
+        [InlineKeyboardButton(text="🔙 Menú Principal", callback_data="menu_principal")]
     ])
     return keyboard
 
@@ -105,4 +110,3 @@ def get_child_menu(menu_name: str):
         return get_ranking_keyboard()
     else:
         return get_root_menu()
-        
