@@ -1,4 +1,4 @@
-# from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Boolean, JSON, Text
+from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Boolean, JSON, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from sqlalchemy.ext.asyncio import AsyncAttrs
