@@ -34,39 +34,7 @@ async def handle_start(message: Message, session: AsyncSession):
         user = User(id=user_id, username=username, first_name=first_name, last_name=last_name)
         session.add(user)
         await session.commit()
-        await session.refresh(user)
-        logger.info(f"Nuevo usuario registrado: {user_id} ({username})")
-        await set_user_menu_state(session, user_id, "root")
-    else:
-        await set_user_menu_state(session, user_id, "root")
-
-    await message.answer(
-        f"¡Hola, {first_name}! 👋\n"
-        "Aquí está tu menú principal:",
-        reply_markup=get_main_menu_keyboard()
-    )
-
-@router.callback_query(F.data == "main_menu")
-async def back_to_main_menu(callback: CallbackQuery, session: AsyncSession):
-    user_id = callback.from_user.id
-    await set_user_menu_state(session, user_id, "root")
-    await callback.message.edit_text("Menú principal:", reply_markup=get_main_menu_keyboard())
-    await callback.answer()
-
-@router.callback_query(F.data.startswith("menu:"))
-async def menu_callback_handler(callback: CallbackQuery, session: AsyncSession):
-    user_id = callback.from_user.id
-    current_menu = callback.data.split(":")[1]
-
-    if current_menu == "back":
-        previous = await get_user_menu_state(session, user_id)
-        if previous and previous != "root":
-            await set_user_menu_state(session, user_id, "root")
-            await callback.message.edit_reply_markup(reply_markup=get_parent_menu(previous))
-        else:
-            await set_user_menu_state(session, user_id, "root")
-            await callback.message.edit_reply_markup(reply_markup=get_root_menu())
-        await callback.answer()
+        
         return
 
     await set_user_menu_state(session, user_id, current_menu)
