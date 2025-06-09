@@ -14,27 +14,37 @@ def get_main_menu_keyboard():
     return keyboard
 
 def get_profile_keyboard():
-    ...
     # Implementación original de get_profile_keyboard
     ...
 
 def get_missions_keyboard(missions: list, offset: int = 0):
-    ...
     # Implementación original de get_missions_keyboard
     ...
 
 def get_reward_keyboard(rewards: list, offset: int = 0):
-    ...
-    # Implementación de get_reward_keyboard
-    ...
+    """
+    Genera un teclado inline con las recompensas activas.
+    :param rewards: Lista de objetos Reward con atributos 'id', 'name' y 'cost'.
+    :param offset: Desplazamiento para paginación (opcional).
+    :return: InlineKeyboardMarkup
+    """
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"{reward.name} ({reward.cost} pts)",
+                    callback_data=f"reward_{reward.id}"
+                )
+            ] for reward in rewards
+        ]
+    )
+    return keyboard
 
 def get_admin_main_keyboard():
-    ...
     # Implementación original de get_admin_main_keyboard
     ...
 
 def get_reaction_keyboard(message_id: int):
-    ...
     # Implementación original de get_reaction_keyboard
     ...
 
@@ -56,4 +66,18 @@ def get_confirm_purchase_keyboard(reward_id: int):
             )
         ]
     ])
+    return keyboard
+
+def get_ranking_keyboard():
+    """
+    Genera un teclado de respuesta con opción de volver al menú principal tras mostrar el ranking.
+    :return: ReplyKeyboardMarkup
+    """
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🔙 Menú Principal")]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
     return keyboard
