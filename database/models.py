@@ -46,3 +46,14 @@ class Event(AsyncAttrs, Base):
 
     def __repr__(self):
         return f"<Event(id={self.id}, name='{self.name}', active={self.is_active})>"
+
+class Mission(AsyncAttrs, Base):
+    __tablename__ = "missions"
+    id = Column(Integer, primary_key=True)
+    title = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    type = Column(String, nullable=False)  # daily, weekly, etc.
+    goal = Column(Integer, nullable=False)
+    points = Column(Integer, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.now())
