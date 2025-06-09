@@ -1,7 +1,13 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from database.models import Base
+# config.py
 
-DATABASE_URL = "sqlite+aiosqlite:///gamegemini.db"  # O ajusta a tu motor real
+import os
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+class Config:
+    BOT_TOKEN = os.getenv("BOT_TOKEN", "TU_TOKEN_AQUI")
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///gamegemini.db")
+    ADMINS = [int(admin_id) for admin_id in os.getenv("ADMINS", "").split(",") if admin_id]
+
+# Motor de base de datos y sesión asíncrona
+engine = create_async_engine(Config.DATABASE_URL, echo=False)
 session_maker = async_sessionmaker(bind=engine, expire_on_commit=False)
