@@ -1,21 +1,22 @@
-# handlers/user_handlers.py - Bloque 1 de 2
+# handlers/user_handlers.py — Bloque 1 de 2
 
 import datetime
-from aiogram import Router, F, Bot  # Asegúrate de importar Bot aquí
+from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton  # Import for external actions in channel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from database.models import User, Mission, Reward
 from utils.keyboard_utils import (
     get_main_menu_keyboard,
+    get_profile_keyboard,
     get_missions_keyboard,
     get_reward_keyboard,
     get_confirm_purchase_keyboard,
-    get_ranking_keyboard
+    get_ranking_keyboard,
+    get_reaction_keyboard
 )
 from services.point_service import (
     add_points,
@@ -40,7 +41,7 @@ router = Router()
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession):
-    """Maneja el comando /start y registra al usuario si no existe."""
+    """Maneja /start y registra al usuario."""
     stmt = select(User).where(User.id == message.from_user.id)
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
@@ -48,7 +49,8 @@ async def cmd_start(message: Message, session: AsyncSession):
         user = User(
             id=message.from_user.id,
             username=message.from_user.username or "SinUsername",
-            join_date=datetime.datetime.utcnow()
+            join_date=datetime.datetime.utcnow(),
+            points=0
         )
         session.add(user)
         await session.commit()
@@ -73,11 +75,11 @@ async def cmd_missions(message: Message, session: AsyncSession):
 
 @router.callback_query(F.data.startswith("mission_"))
 async def cq_select_mission(callback: CallbackQuery, session: AsyncSession):
-    """Selecciona una misión y la marca como completada tras confirmar."""
+    """Marca misión como completada y otorga puntos."""
     mission_id = int(callback.data.split("_")[1])
-    points_awarded = await complete_mission(session, callback.from_user.id, mission_id)
+    points = await complete_mission(session, callback.from_user.id, mission_id)
     await callback.message.edit_text(
-        f"Misión completada, ganaste {points_awarded} puntos.",
+        f"Misión completada, ganaste {points} puntos.",
         reply_markup=get_main_menu_keyboard()
     )
 
@@ -89,10 +91,11 @@ async def cmd_store(message: Message, session: AsyncSession):
         "Catálogo de recompensas:",
         reply_markup=get_reward_keyboard(rewards)
     )
+    # handlers/user_handlers.py — Bloque 2 de 2
 
 @router.callback_query(F.data.startswith("reward_"))
 async def cq_select_reward(callback: CallbackQuery, session: AsyncSession):
-    """Muestra confirmación de compra para la recompensa seleccionada."""
+    """Pregunta al usuario si confirma la compra."""
     reward_id = int(callback.data.split("_")[1])
     await callback.message.edit_text(
         "¿Confirmas que deseas canjear esta recompensa?",
@@ -101,108 +104,61 @@ async def cq_select_reward(callback: CallbackQuery, session: AsyncSession):
 
 @router.callback_query(F.data.startswith("confirm_purchase_"))
 async def cq_confirm_purchase(callback: CallbackQuery, session: AsyncSession):
-    """Procesa la compra de la recompensa si el usuario tiene puntos suficientes."""
-    reward_id = int(callback.data.split("_")[1])
-    user_points = await get_user_points(session, callback.from_user.id)
-    reward = await session.get(Reward, reward_id)
-    if user_points >= reward.cost:
-        await record_purchase(session, callback.from_user.id, reward_id)
-        await add_points(session, callback.from_user.id, -reward.cost)
+    """Procesa el canje de la recompensa."""
+    reward_id = int(callback.data.split("_")[2])
+    success = await redeem_reward(session, callback.from_user.id, reward_id)
+    if success:
+        points = await get_user_points(session, callback.from_user.id)
         await callback.message.edit_text(
-            f"Recompensa {reward.name} adquirida. Te quedan {user_points - reward.cost} puntos.",
+            f"Recompensa adquirida. Te quedan {points} puntos.",
             reply_markup=get_main_menu_keyboard()
         )
     else:
         await callback.message.edit_text(
-            "No tienes suficientes puntos para esta recompensa.",
+            "No tienes suficientes puntos o recompensa inactiva.",
             reply_markup=get_main_menu_keyboard()
-)# handlers/user_handlers.py - Bloque 2 de 2
+        )
 
 @router.callback_query(F.data == "cancel_purchase")
 async def cq_cancel_purchase(callback: CallbackQuery):
-    """Cancela el proceso de compra y regresa al menú."""
+    """Cancela el proceso de compra."""
     await callback.message.edit_text(
         "Compra cancelada.",
         reply_markup=get_main_menu_keyboard()
     )
 
 @router.message(Command("ranking"))
-async def cmd_ranking(message: Message):
-    """Muestra el ranking de usuarios basado en puntos."""
-    top_users = await get_top_users(10)
+async def cmd_ranking(message: Message, session: AsyncSession):
+    """Muestra ranking de los top usuarios."""
+    top_users = await get_top_users(session, 10)
     text = "🏆 Top 10 Usuarios 🏆\n"
-    for idx, user in enumerate(top_users, start=1):
-        text += f"{idx}. {user.username}: {user.points} pts\n"
+    for i, u in enumerate(top_users, start=1):
+        text += f"{i}. {u.username}: {u.points} pts\n"
     await message.answer(text, reply_markup=get_ranking_keyboard())
 
 @router.message(Command("perfil"))
 async def cmd_profile(message: Message, session: AsyncSession):
-    """Muestra perfil de usuario con puntos y nivel."""
+    """Muestra perfil con nivel y puntos."""
     points = await get_user_points(session, message.from_user.id)
     level = await get_user_level(session, message.from_user.id)
-    threshold = get_level_threshold(level + 1)
+    next_thr = get_level_threshold(level + 1)
     await message.answer(
         f"Perfil de {message.from_user.first_name}:\n"
         f"Nivel: {level}\n"
-        f"Puntos: {points}/{threshold}",
+        f"Puntos: {points}/{next_thr}",
         reply_markup=get_main_menu_keyboard()
     )
 
 @router.message(Command("misiones_activas"))
 async def cmd_active_missions(message: Message, session: AsyncSession):
-    """Muestra misiones ya iniciadas/completadas."""
-    # Implementación pendiente o existente...
+    """Muestra misiones activas o completadas."""
+    # Implementación existente o pendiente
     pass
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message, session: AsyncSession):
-    """Estadísticas avanzadas de usuario."""
-    # Ejemplo: mostrar número de misiones completadas, compras, etc.
+    """Estadísticas avanzadas del usuario."""
+    # Ejemplo: número de misiones completadas, compras realizadas, etc.
     pass
 
-# Aquí podrías continuar con más handlers, por ejemplo noticias, ayuda, etc.
-# handlers/user_handlers.py - Bloque 2 de 2
-
-@router.callback_query(F.data == "cancel_purchase")
-async def cq_cancel_purchase(callback: CallbackQuery):
-    """Cancela el proceso de compra y regresa al menú."""
-    await callback.message.edit_text(
-        "Compra cancelada.",
-        reply_markup=get_main_menu_keyboard()
-    )
-
-@router.message(Command("ranking"))
-async def cmd_ranking(message: Message):
-    """Muestra el ranking de usuarios basado en puntos."""
-    top_users = await get_top_users(10)
-    text = "🏆 Top 10 Usuarios 🏆\n"
-    for idx, user in enumerate(top_users, start=1):
-        text += f"{idx}. {user.username}: {user.points} pts\n"
-    await message.answer(text, reply_markup=get_ranking_keyboard())
-
-@router.message(Command("perfil"))
-async def cmd_profile(message: Message, session: AsyncSession):
-    """Muestra perfil de usuario con puntos y nivel."""
-    points = await get_user_points(session, message.from_user.id)
-    level = await get_user_level(session, message.from_user.id)
-    threshold = get_level_threshold(level + 1)
-    await message.answer(
-        f"Perfil de {message.from_user.first_name}:\n"
-        f"Nivel: {level}\n"
-        f"Puntos: {points}/{threshold}",
-        reply_markup=get_main_menu_keyboard()
-    )
-
-@router.message(Command("misiones_activas"))
-async def cmd_active_missions(message: Message, session: AsyncSession):
-    """Muestra misiones ya iniciadas/completadas."""
-    # Implementación pendiente o existente...
-    pass
-
-@router.message(Command("stats"))
-async def cmd_stats(message: Message, session: AsyncSession):
-    """Estadísticas avanzadas de usuario."""
-    # Ejemplo: mostrar número de misiones completadas, compras, etc.
-    pass
-
-# Aquí podrías continuar con más handlers, por ejemplo noticias, ayuda, etc.
+# Puedes añadir aquí más handlers específicos según necesites.
