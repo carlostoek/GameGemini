@@ -4,13 +4,12 @@ import logging
 from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select
 from database.models import User
-from aiogram import logger as aiologger
 
-# Usamos logger para registrar eventos de puntos
+# Configuramos el logger estándar de Python
 logger = logging.getLogger(__name__)
-
+logger.setLevel(logging.INFO)
 
 class PointService:
     def __init__(self, session: AsyncSession):
@@ -19,11 +18,10 @@ class PointService:
     async def add_points(self, user_id: int, points: int) -> Optional[User]:
         """
         Suma (o resta, si points es negativo) puntos al usuario.
-        Crea usuario placeholder si no existe (opcional).
+        Crea usuario si no existe.
         """
         user = await self.session.get(User, user_id)
         if not user:
-            # En teoría nunca debería pasar si creas usuario en /start
             user = User(id=user_id, username="SinUsername", points=0)
             self.session.add(user)
         user.points = (user.points or 0) + points
@@ -54,16 +52,13 @@ class PointService:
         user = await self.session.get(User, user_id)
         return user.points if user else 0
 
-
-# ——— Módulos globales para facilidad de importación ———
+# ——— Atajos globales para importación fácil ———
 
 async def add_points(session: AsyncSession, user_id: int, points: int) -> Optional[User]:
     return await PointService(session).add_points(user_id, points)
 
-
 async def get_user_points(session: AsyncSession, user_id: int) -> int:
     return await PointService(session).get_user_points(user_id)
-
 
 async def get_top_users(session: AsyncSession, limit: int = 10) -> List[User]:
     """
@@ -73,13 +68,9 @@ async def get_top_users(session: AsyncSession, limit: int = 10) -> List[User]:
     result = await session.execute(stmt)
     return result.scalars().all()
 
-
 async def record_purchase(session: AsyncSession, user_id: int, reward_id: int) -> bool:
     """
-    Registra la compra de una recompensa. Aquí puedes
-    enlazar con un modelo Purchase si lo tienes, o
-    simplemente usar un log y restar puntos.
+    Registra la compra de una recompensa (placeholder).
     """
-    # Ejemplo simple de log
     logger.info(f"Recording purchase: user {user_id}, reward {reward_id}")
     return True
