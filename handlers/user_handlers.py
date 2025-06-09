@@ -232,7 +232,8 @@ async def show_rewards(callback_or_message: Message | CallbackQuery, session: As
         else:
             await callback_or_message.answer(text, reply_markup=keyboard)
         return
-rewards_on_page = active_rewards[offset:offset+5]
+
+    rewards_on_page = active_rewards[offset:offset+5]
     keyboard = get_reward_keyboard(active_rewards, offset)
 
     rewards_list_text = "🛍️ **Tienda de Recompensas:**\n\n"
