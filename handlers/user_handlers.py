@@ -1,34 +1,50 @@
-# handlers/user_handlers.py - Bloque 1 de 2
 import datetime
-from aiogram import Router, F, Bot # Asegúrate de importar Bot aquí
+from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton # Import for external actions in channel
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from database.models import User, Mission, Reward
+from database.models import User, Mission, Reward, get_user_menu_state, set_user_menu_state
 from services.point_service import PointService
 from services.level_service import LevelService
 from services.achievement_service import AchievementService, ACHIEVEMENTS
-from services.mission_service import MissionService # <-- ¡Asegúrate de que esta línea esté presente!
+from services.mission_service import MissionService
 from services.reward_service import RewardService
 from utils.keyboard_utils import (
     get_main_menu_keyboard, get_profile_keyboard, get_missions_keyboard,
     get_reward_keyboard, get_confirm_purchase_keyboard, get_ranking_keyboard,
-    get_reaction_keyboard # Necesaria si no la tenías ya
+    get_reaction_keyboard,
+    get_root_menu, get_parent_menu, get_child_menu
 )
-from utils.message_utils import get_profile_message, get_mission_details_message, get_reward_details_message
-from config import Config
-import asyncio
-import logging # Añade logging
-
-logger = logging.getLogger(__name__) # Añade logger
 
 router = Router()
 
+@router.callback_query(F.data.startswith("menu:"))
+async def menu_callback_handler(callback: CallbackQuery, session: AsyncSession):
+    user_id = callback.from_user.id
+    current_menu = callback.data.split(":")[1]
+
+    if current_menu == "back":
+        parent_menu = await get_user_menu_state(session, user_id)
+
+        if parent_menu == "root":
+            await callback.message.edit_reply_markup(reply_markup=get_root_menu())
+            return
+
+        if parent_menu:
+            await callback.message.edit_reply_markup(reply_markup=get_parent_menu(parent_menu))
+            await set_user_menu_state(session, user_id, "root")
+        else:
+            await callback.message.edit_reply_markup(reply_markup=get_root_menu())
+            await set_user_menu_state(session, user_id, "root")
+    else:
+        await set_user_menu_state(session, user_id, current_menu)
+        await callback.message.edit_reply_markup(reply_markup=get_child_menu(current_menu))
+
 @router.message(CommandStart())
-async def cmd_start(message: Message, session: AsyncSession):
+async def handle_start(message: Message, session: AsyncSession):
     user_id = message.from_user.id
     username = message.from_user.username
     first_name = message.from_user.first_name
