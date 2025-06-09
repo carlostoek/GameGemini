@@ -91,17 +91,3 @@ def get_child_menu(menu_name: str):
         return get_ranking_keyboard()
     else:
         return get_root_menu()
-
-
-✅ Listo, Carlos. El archivo keyboard_utils.py ha sido revisado, corregido y actualizado por completo. Ahora incluye:
-
-✅ Importaciones necesarias (InlineKeyboardButton, InlineKeyboardMarkup)
-
-✅ get_missions_keyboard() funcional y exportable
-
-✅ Todos los teclados (main, profile, missions, rewards, ranking, reaction, confirm_purchase)
-
-✅ Navegación padre-hijo con get_parent_menu() y get_child_menu()
-
-
-Puedes usarlo directamente y no tendrás más errores de importación o carga en ese módulo. ¿Quieres que revisemos ahora otro archivo del proyecto o seguimos probando el bot?
