@@ -1,148 +1,52 @@
-# services/mission_service.py
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
-from database.models import Mission, User
 import datetime
-import logging
-
-logger = logging.getLogger(__name__)
+import random
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from database.models import User
+from services.point_service import PointService
 
 class MissionService:
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.point_service = PointService(session)
 
-    async def get_active_missions(self, user_id: int = None, mission_type: str = None) -> list[Mission]:
-        stmt = select(Mission).where(Mission.is_active == True)
-        if mission_type:
-            stmt = stmt.where(Mission.type == mission_type)
+    async def get_user_by_telegram_id(self, telegram_id: int) -> User | None:
+        """Obtiene un usuario por su ID de Telegram."""
+        stmt = select(User).where(User.telegram_id == telegram_id)
         result = await self.session.execute(stmt)
-        missions = result.scalars().all()
+        return result.scalar_one_or_none()
 
-        if user_id: # Filter out completed missions for a specific user based on reset rules
-            user = await self.session.get(User, user_id)
-            if user:
-                filtered_missions = []
-                now = datetime.datetime.now()
-
-                for mission in missions:
-                    is_completed_for_period, _ = await self.check_mission_completion_status(user, mission)
-                    if not is_completed_for_period:
-                        filtered_missions.append(mission)
-                return filtered_missions
-        return missions
-
-    async def get_mission_by_id(self, mission_id: str) -> Mission | None:
-        return await self.session.get(Mission, mission_id)
-
-    async def check_mission_completion_status(self, user: User, mission: Mission, target_message_id: int = None) -> tuple[bool, str | None]:
+    async def claim_daily_mission(self, telegram_id: int) -> tuple[bool, int | datetime.timedelta]:
         """
-        Checks if a mission is completed for the current period for a given user.
-        Returns (is_completed, completion_id_for_type)
-        For 'reaction' missions, completion_id is the message_id.
+        Permite al usuario reclamar su misión diaria.
+        Retorna (True, puntos_obtenidos) si se reclamó con éxito.
+        Retorna (False, tiempo_restante) si ya la reclamó y aún no pasaron 24h.
         """
-        now = datetime.datetime.now()
-
-        # Handle 'reaction' missions separately
-        if mission.type == 'reaction':
-            if target_message_id is None:
-                logger.warning(f"check_mission_completion_status called for reaction mission '{mission.id}' without target_message_id.")
-                return True, None # Cannot check without target_message_id, assume completed to avoid issues
-
-            # Check if user has already reacted to this specific message_id
-            if user.channel_reactions and str(target_message_id) in user.channel_reactions:
-                return True, str(target_message_id) # Already reacted to this message
-            return False, None # Not reacted to this message yet
-
-        # For other mission types, use the existing logic
-        if mission.id in user.missions_completed:
-            completed_at_str = user.missions_completed[mission.id]
-            completed_at = datetime.datetime.fromisoformat(completed_at_str)
-
-            if mission.type == 'daily':
-                if (now - completed_at).total_seconds() < 24 * 3600:
-                    return True, mission.id
-            elif mission.type == 'weekly':
-                # Check if it's within the current week (e.g., Monday to Sunday)
-                # This check can be more robust for different week definitions
-                start_of_week_completed = completed_at - datetime.timedelta(days=completed_at.weekday())
-                start_of_current_week = now - datetime.timedelta(days=now.weekday())
-                if start_of_week_completed.date() == start_of_current_week.date():
-                    return True, mission.id
-            elif mission.type in ['one_time', 'event']:
-                # One-time or event missions are completed indefinitely once done
-                return True, mission.id
-        return False, None
-
-
-    async def complete_mission(self, user_id: int, mission_id: str, target_message_id: int = None) -> tuple[bool, Mission | None]:
-        """
-        Marks a mission as completed for a user.
-        For 'reaction' missions, target_message_id is required.
-        """
-        user = await self.session.get(User, user_id)
-        mission = await self.session.get(Mission, mission_id)
-
-        if not user or not mission:
-            logger.warning(f"Attempted to complete mission {mission_id} for user {user_id}: User or Mission not found.")
-            return False, None
-
-        # Check if already completed for the period, with specific logic for 'reaction' type
-        is_completed_for_period, _ = await self.check_mission_completion_status(user, mission, target_message_id)
-        if is_completed_for_period:
-            logger.info(f"Mission {mission_id} for user {user_id} already completed for the current period/message.")
-            return False, mission # Already completed
+        user = await self.get_user_by_telegram_id(telegram_id)
+        if not user:
+            # Esto no debería pasar si el middleware de registro está funcionando
+            return False, 0
 
         now = datetime.datetime.now()
+        if user.last_daily_mission_claim:
+            time_since_last_claim = now - user.last_daily_mission_claim
+            if time_since_last_claim < datetime.timedelta(hours=24):
+                time_remaining = datetime.timedelta(hours=24) - time_since_last_claim
+                return False, time_remaining
 
-        if mission.type == 'reaction':
-            if target_message_id is None:
-                logger.error(f"Cannot complete reaction mission {mission_id} without target_message_id.")
-                return False, None
-            # Mark reaction as completed for this specific message_id
-            user.channel_reactions[str(target_message_id)] = now.isoformat() # Store timestamp
-            # No need to add to user.missions_completed for reaction missions, as they are per-message
-            # However, if you want to track if a user has ever completed *any* reaction mission,
-            # you might still add a generic entry to missions_completed for the mission ID itself.
-            # For now, we'll rely only on channel_reactions for this type.
-        else:
-            user.missions_completed[mission.id] = now.isoformat() # Store as ISO string
+        # Generar puntos aleatorios para la misión diaria
+        points_awarded = random.randint(50, 100)
 
-            # Update last reset timestamps for the user
-            if mission.type == 'daily':
-                user.last_daily_mission_reset = now
-            elif mission.type == 'weekly':
-                user.last_weekly_mission_reset = now
-        
-        # Ensure JSON field updates are marked for SQLAlchemy
-        self.session.add(user) # Mark user as modified
+        # Añadir puntos al usuario
+        await self.point_service.add_points(telegram_id, points_awarded)
 
+        # Actualizar la última fecha de reclamo
+        user.last_daily_mission_claim = now
         await self.session.commit()
         await self.session.refresh(user)
-        logger.info(f"User {user_id} successfully completed mission {mission_id} (Type: {mission.type}, Message: {target_message_id}).")
-        return True, mission
 
-    async def create_mission(self, name: str, description: str, points_reward: int, mission_type: str, requires_action: bool = False, action_data: dict = None) -> Mission:
-        mission_id = f"{mission_type}_{name.lower().replace(' ', '_').replace('.', '').replace(',', '')}" # Simple ID generation
-        new_mission = Mission(
-            id=mission_id,
-            name=name,
-            description=description,
-            points_reward=points_reward,
-            type=mission_type,
-            is_active=True,
-            requires_action=requires_action,
-            action_data=action_data
-        )
-        self.session.add(new_mission)
-        await self.session.commit()
-        await self.session.refresh(new_mission)
-        return new_mission
+        return True, points_awarded
 
-    async def toggle_mission_status(self, mission_id: str, status: bool) -> bool:
-        mission = await self.session.get(Mission, mission_id)
-        if mission:
-            mission.is_active = status
-            await self.session.commit()
-            return True
-        return False
-                             
+    # Puedes añadir más lógicas de misiones aquí
+    # Por ejemplo, misiones semanales, logros, etc.
+    
