@@ -1,9 +1,9 @@
 import datetime
-import logging
 from aiogram import Router, F, Bot
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database.models import User, Mission, Reward, get_user_menu_state, set_user_menu_state
@@ -19,8 +19,38 @@ from utils.keyboard_utils import (
     get_root_menu, get_parent_menu, get_child_menu
 )
 
-logger = logging.getLogger(__name__)
 router = Router()
+
+
+@router.callback_query(F.data == "menu_principal")
+async def go_to_main_menu(callback: CallbackQuery, session: AsyncSession):
+    user_id = callback.from_user.id
+    await set_user_menu_state(session, user_id, "root")
+    await callback.message.edit_text("Has vuelto al menú principal:", reply_markup=get_main_menu_keyboard())
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("menu:"))
+async def menu_callback_handler(callback: CallbackQuery, session: AsyncSession):
+    user_id = callback.from_user.id
+    current_menu = callback.data.split(":")[1]
+
+    if current_menu == "back":
+        parent_menu = await get_user_menu_state(session, user_id)
+
+        if parent_menu == "root":
+            await callback.message.edit_reply_markup(reply_markup=get_root_menu())
+            return
+
+        if parent_menu:
+            await callback.message.edit_reply_markup(reply_markup=get_parent_menu(parent_menu))
+            await set_user_menu_state(session, user_id, "root")
+        else:
+            await callback.message.edit_reply_markup(reply_markup=get_root_menu())
+            await set_user_menu_state(session, user_id, "root")
+    else:
+        await set_user_menu_state(session, user_id, current_menu)
+        await callback.message.edit_reply_markup(reply_markup=get_child_menu(current_menu))
 
 @router.message(CommandStart())
 async def handle_start(message: Message, session: AsyncSession):
@@ -34,13 +64,26 @@ async def handle_start(message: Message, session: AsyncSession):
         user = User(id=user_id, username=username, first_name=first_name, last_name=last_name)
         session.add(user)
         await session.commit()
-        
-        return
+        await session.refresh(user)
+        logger.info(f"Nuevo usuario registrado: {user_id} ({username})")
+        await message.answer(
+            f"¡Hola, {first_name}! 👋\n"
+            "¡Bienvenido al sistema de gamificación! Conmigo, podrás ganar puntos por participar, completar misiones y desbloquear logros.\n\n"
+            "Usa el menú de abajo para navegar:",
+            reply_markup=get_main_menu_keyboard()
+        )
+    else:
+        await message.answer(
+            f"¡Bienvenido de nuevo, {first_name}! 🎉\n"
+            "Aquí está tu menú principal:",
+            reply_markup=get_main_menu_keyboard()
+        )
 
-    await set_user_menu_state(session, user_id, current_menu)
-    await callback.message.edit_reply_markup(reply_markup=get_child_menu(current_menu))
+@router.callback_query(F.data == "main_menu")
+async def back_to_main_menu(callback: CallbackQuery):
+    await callback.message.edit_text("Aquí está tu menú principal:", reply_markup=get_main_menu_keyboard())
     await callback.answer()
-    
+
 @router.message(F.text == "👤 Mi Perfil")
 async def show_profile(message: Message, session: AsyncSession):
     user = await session.get(User, message.from_user.id)
@@ -369,4 +412,16 @@ async def handle_channel_reaction(callback: CallbackQuery, session: AsyncSession
                 mission_completed_message = f"\n\n🎉 ¡Misión completada: **{mission_obj.name}**! Ganaste `{mission_obj.points_reward}` puntos adicionales."
                 # Asumimos que add_points ya maneja el multiplicador de eventos si hay uno activo
                 updated_user = await point_service.add_points(user_id, mission_obj.points_reward)
-     
+                leveled_up = await level_service.check_for_level_up(updated_user) or leveled_up # Check level up again after mission points
+
+
+    # Prepare the alert message
+    alert_message = f"¡Reacción registrada! Ganaste `{base_points_for_reaction}` puntos."
+    alert_message += mission_completed_message # Add mission completion message if any
+
+    if leveled_up:
+        alert_message += f"\n\n✨ ¡Felicidades! Has subido al nivel `{updated_user.level}`."
+
+    await callback.answer(alert_message, show_alert=True)
+    logger.info(f"User {user_id} reacted with {reaction_type} to message {message_id}. Points: {updated_user.points}")
+
