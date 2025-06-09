@@ -1,13 +1,9 @@
-# config.py
-
 import os
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 class Config:
-    BOT_TOKEN = os.getenv("BOT_TOKEN", "TU_TOKEN_AQUI")
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///gamegemini.db")
-    ADMINS = [int(admin_id) for admin_id in os.getenv("ADMINS", "").split(",") if admin_id]
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
+    ADMIN_ID = int(os.getenv("ADMIN_ID"))
+    CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
-# Motor de base de datos y sesión asíncrona
-engine = create_async_engine(Config.DATABASE_URL, echo=False)
-session_maker = async_sessionmaker(bind=engine, expire_on_commit=False)
+    # URL de la base de datos
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///gamification.db")
