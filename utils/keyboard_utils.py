@@ -57,6 +57,20 @@ def get_reaction_keyboard(message_id: int):
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+def get_admin_main_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Crear Recompensa", callback_data="admin_create_reward")],
+        [InlineKeyboardButton(text="📝 Crear Misión", callback_data="admin_create_mission")],
+        [InlineKeyboardButton(text="🔥 Activar Evento", callback_data="admin_activate_event")],
+        [InlineKeyboardButton(text="📊 Exportar Datos", callback_data="admin_export_data")],
+        [InlineKeyboardButton(text="🔄 Resetear Temporada", callback_data="admin_reset_season")],
+        [InlineKeyboardButton(text="🎁 Asignar Puntos", callback_data="admin_assign_points")],
+        [InlineKeyboardButton(text="📢 Enviar mensaje con reacciones al Canal", callback_data="admin_send_channel_post_reactions")],
+        [InlineKeyboardButton(text="🔙 Menú Principal", callback_data="main_menu")]
+    ])
+    return keyboard
+
+
 def get_root_menu():
     keyboard = [
         [InlineKeyboardButton(text="👤 Perfil", callback_data="menu:profile")],
@@ -91,3 +105,4 @@ def get_child_menu(menu_name: str):
         return get_ranking_keyboard()
     else:
         return get_root_menu()
+        
