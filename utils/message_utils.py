@@ -28,22 +28,27 @@ async def get_profile_message(user: User, active_missions: list[Mission]) -> str
             if ach_id in ACHIEVEMENTS:
                 granted_achievements_list.append({
                     "id": ach_id,
-                    "name": ACHIEVEMENTS[ach_id]['name'],
-                    "icon": ACHIEVEMENTS[ach_id]['icon'],
+                    "name": ACHIEVEMENTS[ach_id].get("name", ach_id),
+                    "icon": ACHIEVEMENTS[ach_id].get("icon", ""),
                     "granted_at": timestamp_str
                 })
-        granted_achievements_list.sort(key=lambda x: x['granted_at'], reverse=True)
-
-        # Formato de logros con el título personalizado
-        achievements_formatted = [f"{ach['icon']} `{ach['name']}`" for ach in granted_achievements_list]
-        achievements_text = BOT_MESSAGES["profile_achievements_title"] + "\n" + "\n".join(achievements_formatted)
+        # Ordenar logros por fecha de concesión si es necesario
+        granted_achievements_list.sort(key=lambda x: x['granted_at'])
+        
+        achievements_list = [
+            f"{ach['icon']} {ach['name']} (Desbloqueado el: {datetime.datetime.fromisoformat(ach['granted_at']).strftime('%d/%m/%Y')})"
+            for ach in granted_achievements_list
+        ]
+        achievements_text = BOT_MESSAGES["profile_achievements_title"] + "\n" + "\n".join(achievements_list)
 
 
     # Usar el mensaje personalizado para no misiones activas
     missions_text = BOT_MESSAGES["profile_no_active_missions"]
     if active_missions:
-        missions_list = [f"- **{mission.name}** (`{mission.points_reward}` Pts)" for mission in active_missions]
-        # Usar el título personalizado para misiones activas
+        missions_list = [
+            f"• {mission.name} ({mission.points_reward} Puntos)"
+            for mission in active_missions
+        ]
         missions_text = BOT_MESSAGES["profile_active_missions_title"] + "\n" + "\n".join(missions_list)
 
     return (
@@ -77,6 +82,30 @@ async def get_reward_details_message(reward: Reward, user_points: int) -> str:
         reward_name=reward.name,
         reward_description=reward.description,
         reward_cost=reward.cost,
-        stock_info=stock_info
+        stock_info=stock_info,
+        user_points=user_points,
+        can_afford_text=BOT_MESSAGES["reward_details_can_afford"] if user_points >= reward.cost else BOT_MESSAGES["reward_details_cannot_afford"]
     )
-    
+
+async def get_ranking_message(users_ranking: list[User]) -> str:
+    """
+    Generates a formatted message for the user ranking.
+    """
+    ranking_text = BOT_MESSAGES["ranking_title"] + "\n\n"
+
+    if not users_ranking:
+        return ranking_text + BOT_MESSAGES["no_ranking_data"]
+
+    for i, user in enumerate(users_ranking):
+        # Format each user entry
+        # Usa user.username si está disponible, de lo contrario, user.first_name
+        display_name = user.username if user.username else user.first_name if user.first_name else "Usuario Desconocido"
+        ranking_text += BOT_MESSAGES["ranking_entry"].format(
+            rank=i + 1,
+            username=display_name,
+            points=user.points,
+            level=user.level
+        ) + "\n"
+
+    return ranking_text
+
