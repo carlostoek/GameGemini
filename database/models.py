@@ -1,3 +1,4 @@
+# database/models.py
 from sqlalchemy import Column, Integer, String, BigInteger, DateTime, Boolean, JSON, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
@@ -22,33 +23,32 @@ class User(AsyncAttrs, Base):
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
+    # ¡NUEVA COLUMNA para el estado del menú!
+    menu_state = Column(String, default="root") # e.g., "root", "profile", "missions", "rewards"
+
     # ¡NUEVA COLUMNA para registrar reacciones a mensajes del canal!
     # Guarda un diccionario donde la clave es el message_id del canal y el valor es un booleano (True)
     # o el timestamp de la reacción para futura expansión si necesitamos historial.
-    # Por ahora, un simple booleano es suficiente para saber si ya reaccionó.
-    channel_reactions = Column(JSON, default={}) # {'message_id': True, 'message_id_2': True}
-
-
-    def __repr__(self):
-        return f"<User(id={self.id}, username='{self.username}', points={self.points}, level={self.level})>"
+    # Por ahora, un simple booleano es suficiente para registrar si el usuario ya reaccionó a ese mensaje.
+    channel_reactions = Column(JSON, default={}) # {'message_id': True}
 
 class Reward(AsyncAttrs, Base):
     __tablename__ = "rewards"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False, unique=True)
     description = Column(Text)
-    cost = Column(Integer, nullable=False)
+    cost = Column(Integer, default=0)
     stock = Column(Integer, default=-1) # -1 for unlimited
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=func.now())
 
 class Mission(AsyncAttrs, Base):
     __tablename__ = "missions"
-    id = Column(String, primary_key=True) # Unique ID like 'daily_click_post'
+    id = Column(String, primary_key=True, unique=True) # e.g., 'daily_login', 'event_trivia_challenge'
     name = Column(String, nullable=False)
     description = Column(Text)
-    points_reward = Column(Integer, nullable=False)
-    type = Column(String, nullable=False) # 'daily', 'weekly', 'one_time', 'event', 'reaction' (NUEVO TIPO)
+    points_reward = Column(Integer, default=0)
+    type = Column(String, default="one_time") # 'daily', 'weekly', 'one_time', 'event', 'reaction'
     is_active = Column(Boolean, default=True)
     requires_action = Column(Boolean, default=False) # True if requires a specific button click/action outside the bot's menu
     # action_data puede ser usado para especificar, por ejemplo, qué 'button_id' de reacción completa la misión
@@ -74,9 +74,10 @@ async def get_user_menu_state(session, user_id: int) -> str:
         return user.menu_state
     return "root"
 
-async def set_user_menu_state(session, user_id: int, menu_name: str):
-    result = await session.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+async def set_user_menu_state(session, user_id: int, state: str):
+    user = await session.get(User, user_id)
     if user:
-        user.menu_state = menu_name
+        user.menu_state = state
         await session.commit()
+        await session.refresh(user)
+
