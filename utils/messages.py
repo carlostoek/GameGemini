@@ -37,7 +37,7 @@ BOT_MESSAGES = {
     "reward_purchase_failed": "No pudimos procesar tu elección. Inténtalo más tarde.",
 
     # Mensajes de ranking (Unificados)
-    "ranking_title": "🏆 *Tabla de Posiciones*", # Se mantuvo este ya que es el más reciente
+    "ranking_title": "🏆 *Tabla de Posiciones*",
     "ranking_entry": "#{rank}. @{username} - Puntos: `{points}`, Nivel: `{level}`",
     "no_ranking_data": "Aún no hay datos en el ranking. ¡Sé el primero en aparecer!",
     "back_to_main_menu": "Has regresado al centro del Diván. Elige por dónde seguir explorando.",
@@ -71,5 +71,6 @@ BOT_MESSAGES = {
     ),
     "reward_details_stock_info": "📦 *Disponibles:* `{stock_left}`",
     "reward_details_no_stock_info": "📦 *Disponibles:* ilimitadas",
-    "reward_details_not_enough_points_alert": "💔 Te faltan puntos para esta recompensa. Necesitas `{required_points}`, tienes `{user_points}`. Sigue sumando, lo estás haciendo bien."
+    "reward_details_not_enough_points_alert": "💔 Te faltan puntos para esta recompensa. Necesitas `{required_points}`, tienes `{user_points}`. Sigue sumando, lo estás haciendo bien.",
+    "unrecognized_command_text": "Comando no reconocido. Aquí está el menú principal:"
 }
