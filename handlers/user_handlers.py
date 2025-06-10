@@ -11,22 +11,22 @@ from database.models import User, Mission, Reward, get_user_menu_state, set_user
 from services.point_service import PointService
 from services.level_service import LevelService
 from services.achievement_service import AchievementService, ACHIEVEMENTS
-from services.mission_service import MissionService # <-- ¡Asegúrate de que esta línea esté presente!
+from services.mission_service import MissionService
 from services.reward_service import RewardService
 from utils.keyboard_utils import (
     get_main_menu_keyboard, get_profile_keyboard, get_missions_keyboard,
     get_reward_keyboard, get_confirm_purchase_keyboard, get_ranking_keyboard,
-    get_reaction_keyboard # Necesaria si no la tenías ya
+    get_reaction_keyboard,
+    get_root_menu, get_parent_menu, get_child_menu # <--- ¡AÑADE ESTAS LÍNEAS!
 )
 from utils.message_utils import get_profile_message, get_mission_details_message, get_reward_details_message
 from config import Config
 import asyncio
-import logging # Añade logging
+import logging
 
-logger = logging.getLogger(__name__) # Añade logger
+logger = logging.getLogger(__name__)
 
 router = Router()
-
 
 @router.callback_query(F.data == "menu_principal")
 async def go_to_main_menu(callback: CallbackQuery, session: AsyncSession):
