@@ -4,6 +4,12 @@ BOT_MESSAGES = {
         "Aquí cada gesto, cada decisión y cada paso que das, suma. Con cada interacción, te adentras más en *El Juego del Diván*.\n\n"
         "¿Estás list@ para descubrir lo que te espera? Elige por dónde empezar, yo me encargo de hacer que lo disfrutes."
     ),
+
+  # Nuevos mensajes para el ranking
+    "ranking_title": "🏆 *Tabla de Posiciones*",
+    "ranking_entry": "#{rank}. @{username} - Puntos: `{points}`, Nivel: `{level}`",
+    "no_ranking_data": "Aún no hay datos en el ranking. ¡Sé el primero en aparecer!"
+}
     "start_welcome_returning_user": (
         "✨ Qué bueno tenerte de regreso.\n\n"
         "Tu lugar sigue aquí. Tus puntos también... y hay nuevas sorpresas esperándote.\n\n"
