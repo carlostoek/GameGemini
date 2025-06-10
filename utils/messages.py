@@ -1,3 +1,4 @@
+# utils/messages.py
 BOT_MESSAGES = {
     "start_welcome_new_user": (
         "🌙 Bienvenid@ a *El Diván de Diana*…\n\n"
@@ -72,5 +73,11 @@ BOT_MESSAGES = {
     "reward_details_stock_info": "📦 *Disponibles:* `{stock_left}`",
     "reward_details_no_stock_info": "📦 *Disponibles:* ilimitadas",
     "reward_details_not_enough_points_alert": "💔 Te faltan puntos para esta recompensa. Necesitas `{required_points}`, tienes `{user_points}`. Sigue sumando, lo estás haciendo bien.",
+
+    # Mensajes adicionales que eran mencionados en user_handlers.py
+    "menu_missions_text": "Aquí están los desafíos que puedes emprender. ¡Cada uno te acerca más!",
+    "menu_rewards_text": "¡Es hora de canjear tus puntos! Aquí tienes las recompensas disponibles:",
+    "confirm_purchase_message": "¿Estás segur@ de que quieres canjear {reward_name} por {reward_cost} puntos?",
+    "purchase_cancelled_message": "Compra cancelada. Puedes seguir explorando otras recompensas.",
     "unrecognized_command_text": "Comando no reconocido. Aquí está el menú principal:"
 }
