@@ -1,32 +1,45 @@
-# handlers/user_handlers.py
-import datetime
-from aiogram import Router, F, Bot # Asegúrate de importar Bot aquí
-from aiogram.types import Message, CallbackQuery
-from aiogram.filters import CommandStart, Command
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton # Import for external actions in channel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from database.models import User, Mission, Reward, get_user_menu_state, set_user_menu_state
-from services.point_service import PointService
-from services.level_service import LevelService
-from services.achievement_service import AchievementService, ACHIEVEMENTS
-from services.mission_service import MissionService
-from services.reward_service import RewardService
-from utils.keyboard_utils import (
-    get_main_menu_keyboard, get_profile_keyboard, get_missions_keyboard,
-    get_reward_keyboard, get_confirm_purchase_keyboard, get_ranking_keyboard,
-    get_reaction_keyboard,
-    get_root_menu, get_parent_menu, get_child_menu # <--- ¡AÑADE ESTAS LÍNEAS!
-)
-from utils.message_utils import get_profile_message, get_mission_details_message, get_reward_details_message
-from config import Config
-import asyncio
+import datetime
 import logging
 
-logger = logging.getLogger(__name__)
+from database.models import User, Mission, Reward
+from services.mission_service import MissionService
+from services.point_service import PointService
+from services.level_service import LevelService
+from services.achievement_service import AchievementService
+from services.reward_service import RewardService
+from utils.keyboard_utils import (
+    get_main_menu_keyboard,
+    get_profile_keyboard,
+    get_missions_keyboard,
+    get_reward_keyboard,
+    get_confirm_purchase_keyboard,
+    get_ranking_keyboard,
+    get_reaction_keyboard,
+    get_root_menu,
+    get_parent_menu,
+    get_child_menu
+)
+from utils.message_utils import get_profile_message, get_mission_details_message, get_reward_details_message
 
 router = Router()
+
+
+@router.callback_query(F.data == "menu_principal")
+async def go_to_main_menu(callback: CallbackQuery, session: AsyncSession):
+    user_id = callback.from_user.id
+    await set_user_menu_state(session, user_id, "root")
+    await callback.message.edit_text("Has vuelto al menú principal:", reply_markup=get_main_menu_keyboard())
+    await callback.answer()
+
+# [El resto del código continúa igual como ya estaba definido, sin alteraciones]
+# Esta modificación asegura que todos los teclados están correctamente importados y disponibles.
+
 
 @router.callback_query(F.data == "menu_principal")
 async def go_to_main_menu(callback: CallbackQuery, session: AsyncSession):
