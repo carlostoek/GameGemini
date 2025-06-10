@@ -1,3 +1,4 @@
+# utils/keyboard_utils.py
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 
@@ -153,4 +154,3 @@ def get_main_reply_keyboard():
         one_time_keyboard=False # Keep the keyboard visible
     )
     return keyboard
-
