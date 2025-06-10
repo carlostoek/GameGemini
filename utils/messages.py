@@ -4,12 +4,6 @@ BOT_MESSAGES = {
         "Aquí cada gesto, cada decisión y cada paso que das, suma. Con cada interacción, te adentras más en *El Juego del Diván*.\n\n"
         "¿Estás list@ para descubrir lo que te espera? Elige por dónde empezar, yo me encargo de hacer que lo disfrutes."
     ),
-
-  # Nuevos mensajes para el ranking
-    "ranking_title": "🏆 *Tabla de Posiciones*",
-    "ranking_entry": "#{rank}. @{username} - Puntos: `{points}`, Nivel: `{level}`",
-    "no_ranking_data": "Aún no hay datos en el ranking. ¡Sé el primero en aparecer!"
-}
     "start_welcome_returning_user": (
         "✨ Qué bueno tenerte de regreso.\n\n"
         "Tu lugar sigue aquí. Tus puntos también... y hay nuevas sorpresas esperándote.\n\n"
@@ -41,8 +35,11 @@ BOT_MESSAGES = {
     "reward_not_enough_points": "Te faltan `{required_points}` puntos. Ahora tienes `{user_points}`. Pero sigue... estás cerca.",
     "reward_purchase_success": "🎉 ¡Recompensa conseguida! Algo bonito está por llegar.",
     "reward_purchase_failed": "No pudimos procesar tu elección. Inténtalo más tarde.",
-    "ranking_title": "🏆 *Top 10 del Diván*",
-    "ranking_no_users": "Nadie ha entrado aún al juego... ¿Quieres ser el primero?",
+
+    # Mensajes de ranking (Unificados)
+    "ranking_title": "🏆 *Tabla de Posiciones*", # Se mantuvo este ya que es el más reciente
+    "ranking_entry": "#{rank}. @{username} - Puntos: `{points}`, Nivel: `{level}`",
+    "no_ranking_data": "Aún no hay datos en el ranking. ¡Sé el primero en aparecer!",
     "back_to_main_menu": "Has regresado al centro del Diván. Elige por dónde seguir explorando.",
 
     # Botones
