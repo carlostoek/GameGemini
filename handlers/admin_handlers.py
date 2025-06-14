@@ -17,6 +17,7 @@ from services.point_service import PointService
 from services.reward_service import RewardService
 from services.mission_service import MissionService
 from services.level_service import LevelService # Not directly used here, but good to have
+from services.subscription_service import SubscriptionService
 from utils.keyboard_utils import (
     get_admin_main_keyboard,
     get_main_menu_keyboard,
@@ -459,6 +460,22 @@ async def admin_manage_events_sorteos(callback: CallbackQuery):
         return
     await callback.message.edit_text(
         "Gestión de eventos y sorteos en desarrollo.",
+        reply_markup=get_admin_main_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_generate_token")
+async def admin_generate_token(callback: CallbackQuery, session: AsyncSession, bot: Bot):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    service = SubscriptionService(session)
+    token_obj = await service.create_token()
+    bot_info = await bot.get_me()
+    invite_link = f"https://t.me/{bot_info.username}?start={token_obj.token}"
+    await callback.message.edit_text(
+        f"Token generado:\n{invite_link}",
         reply_markup=get_admin_main_keyboard(),
     )
     await callback.answer()

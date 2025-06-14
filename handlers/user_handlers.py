@@ -11,6 +11,7 @@ from services.level_service import LevelService
 from services.achievement_service import AchievementService, ACHIEVEMENTS
 from services.mission_service import MissionService
 from services.reward_service import RewardService
+from services.subscription_service import SubscriptionService
 from utils.keyboard_utils import (
     get_main_menu_keyboard, get_profile_keyboard, get_missions_keyboard,
     get_reward_keyboard, get_confirm_purchase_keyboard, get_ranking_keyboard,
@@ -29,12 +30,30 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-@router.message(CommandStart())
-async def cmd_start(message: Message, session: AsyncSession):
+@router.message(CommandStart(deep_link=True))
+async def cmd_start(message: Message, session: AsyncSession, bot: Bot):
     user_id = message.from_user.id
     username = message.from_user.username
     first_name = message.from_user.first_name
     last_name = message.from_user.last_name
+
+    args = message.text.split(maxsplit=1)
+    token = args[1] if len(args) > 1 else None
+    if token:
+        service = SubscriptionService(session)
+        if await service.is_valid(token):
+            token_obj = await service.get_token(token)
+            invite = await bot.create_chat_invite_link(
+                Config.CHANNEL_ID,
+                expire_date=token_obj.expires_at,
+                member_limit=1,
+            )
+            await message.answer(
+                f"Aquí está tu enlace de invitación:\n{invite.invite_link}"
+            )
+        else:
+            await message.answer("Token inválido o expirado.")
+            return
 
     user = await session.get(User, user_id)
 
