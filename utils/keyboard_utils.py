@@ -1,5 +1,6 @@
 # utils/keyboard_utils.py
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from database.models import User
 
 
 def get_main_menu_keyboard():
@@ -232,4 +233,46 @@ def get_back_keyboard(callback_data: str) -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton(text="🔙 Volver", callback_data=callback_data)]
     ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def get_admin_users_list_keyboard(
+    users: list[User], offset: int, total_count: int, limit: int = 5
+) -> InlineKeyboardMarkup:
+    """Return a keyboard for the paginated list of users with action buttons."""
+    keyboard: list[list[InlineKeyboardButton]] = []
+
+    for user in users:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    text="➕", callback_data=f"admin_user_add_{user.id}"
+                ),
+                InlineKeyboardButton(
+                    text="➖", callback_data=f"admin_user_deduct_{user.id}"
+                ),
+                InlineKeyboardButton(
+                    text="👁", callback_data=f"admin_user_view_{user.id}"
+                ),
+            ]
+        )
+
+    nav_buttons: list[InlineKeyboardButton] = []
+    if offset > 0:
+        nav_buttons.append(
+            InlineKeyboardButton(
+                text="⬅️", callback_data=f"admin_users_page_{offset - limit}"
+            )
+        )
+    if offset + limit < total_count:
+        nav_buttons.append(
+            InlineKeyboardButton(
+                text="➡️", callback_data=f"admin_users_page_{offset + limit}"
+            )
+        )
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+
+    keyboard.append([InlineKeyboardButton(text="🔙 Volver", callback_data="admin_main_menu")])
+
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
