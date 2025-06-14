@@ -21,7 +21,6 @@ from utils.keyboard_utils import (
     get_admin_main_keyboard,
     get_main_menu_keyboard,
     get_reaction_keyboard,
-    get_admin_manage_users_keyboard,
     get_admin_manage_content_keyboard,
     get_admin_content_missions_keyboard,
     get_admin_content_badges_keyboard,
@@ -30,6 +29,7 @@ from utils.keyboard_utils import (
     get_admin_content_auctions_keyboard,
     get_admin_content_daily_gifts_keyboard,
     get_back_keyboard,
+    get_admin_users_list_keyboard,
 )
 from utils.message_utils import get_profile_message
 from config import Config
@@ -70,6 +70,42 @@ class AdminStates(StatesGroup):
     notify_users_text = State()
 
 
+async def show_users_page(message: Message, session: AsyncSession, offset: int) -> None:
+    """Display a paginated list of users with action buttons."""
+    limit = 5
+    if offset < 0:
+        offset = 0
+
+    total_stmt = select(func.count()).select_from(User)
+    total_result = await session.execute(total_stmt)
+    total_users = total_result.scalar_one()
+
+    stmt = (
+        select(User)
+        .order_by(User.id)
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    users = result.scalars().all()
+
+    text_lines = [
+        "👥 *Gestionar Usuarios*",
+        f"Mostrando {offset + 1}-{min(offset + limit, total_users)} de {total_users}",
+        "",
+    ]
+
+    for user in users:
+        display = user.username or (user.first_name or "Sin nombre")
+        text_lines.append(f"- {display} (ID: {user.id}) - {user.points} pts")
+
+    keyboard = get_admin_users_list_keyboard(users, offset, total_users, limit)
+
+    await message.edit_text(
+        "\n".join(text_lines), reply_markup=keyboard, parse_mode="Markdown"
+    )
+
+
 @router.message(Command("admin"))
 async def admin_panel(message: Message):
     if message.from_user.id != Config.ADMIN_ID:
@@ -82,15 +118,27 @@ async def admin_panel(message: Message):
 
 
 @router.callback_query(F.data == "admin_manage_users")
-async def admin_manage_users(callback: CallbackQuery):
+async def admin_manage_users(callback: CallbackQuery, session: AsyncSession):
     if callback.from_user.id != Config.ADMIN_ID:
         await callback.answer("Acceso denegado", show_alert=True)
         return
-    await callback.message.edit_text(
-        "👥 *Gestionar Usuarios* - Elige una opción:",
-        reply_markup=get_admin_manage_users_keyboard(),
-        parse_mode="Markdown",
-    )
+
+    await show_users_page(callback.message, session, 0)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_users_page_"))
+async def admin_users_page(callback: CallbackQuery, session: AsyncSession):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+
+    try:
+        offset = int(callback.data.split("_")[-1])
+    except ValueError:
+        offset = 0
+
+    await show_users_page(callback.message, session, offset)
     await callback.answer()
 
 @router.callback_query(F.data == "admin_main_menu")
@@ -166,6 +214,58 @@ async def admin_process_view_user(message: Message, state: FSMContext, session: 
         profile_text = await get_profile_message(user, active_missions)
         await message.answer(profile_text, parse_mode="Markdown")
     await state.clear()
+
+
+@router.callback_query(F.data.startswith("admin_user_add_"))
+async def admin_quick_add_points(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+
+    user_id = int(callback.data.split("_")[-1])
+    await state.update_data(points_operation="add", target_user_identifier=str(user_id))
+    await callback.message.answer(
+        f"Ingresa la cantidad de puntos a **sumar** a `{user_id}`:",
+        parse_mode="Markdown",
+        reply_markup=get_back_keyboard("admin_manage_users"),
+    )
+    await state.set_state(AdminStates.assigning_points_amount)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_user_deduct_"))
+async def admin_quick_deduct_points(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+
+    user_id = int(callback.data.split("_")[-1])
+    await state.update_data(points_operation="deduct", target_user_identifier=str(user_id))
+    await callback.message.answer(
+        f"Ingresa la cantidad de puntos a **restar** a `{user_id}`:",
+        parse_mode="Markdown",
+        reply_markup=get_back_keyboard("admin_manage_users"),
+    )
+    await state.set_state(AdminStates.assigning_points_amount)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("admin_user_view_"))
+async def admin_quick_view_profile(callback: CallbackQuery, session: AsyncSession):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+
+    user_id = int(callback.data.split("_")[-1])
+    user = await session.get(User, user_id)
+    if not user:
+        await callback.answer("Usuario no encontrado", show_alert=True)
+        return
+    mission_service = MissionService(session)
+    active_missions = await mission_service.get_active_missions(user_id=user.id)
+    profile_text = await get_profile_message(user, active_missions)
+    await callback.message.answer(profile_text, parse_mode="Markdown")
+    await callback.answer()
 
 @router.callback_query(F.data == "admin_search_user")
 async def admin_search_user(callback: CallbackQuery, state: FSMContext):
