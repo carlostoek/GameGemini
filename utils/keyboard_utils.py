@@ -95,6 +95,74 @@ def get_admin_manage_users_keyboard():
     ])
     return keyboard
 
+def get_admin_manage_content_keyboard():
+    """Returns the keyboard for content management options."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📌 Misiones", callback_data="admin_content_missions")],
+        [InlineKeyboardButton(text="🏅 Insignias", callback_data="admin_content_badges")],
+        [InlineKeyboardButton(text="📈 Niveles", callback_data="admin_content_levels")],
+        [InlineKeyboardButton(text="🎁 Recompensas (Catálogo VIP)", callback_data="admin_content_rewards")],
+        [InlineKeyboardButton(text="📦 Subastas", callback_data="admin_content_auctions")],
+        [InlineKeyboardButton(text="🎁 Regalos Diarios", callback_data="admin_content_daily_gifts")],
+        [InlineKeyboardButton(text="🔙 Volver al Menú Principal de Administrador", callback_data="admin_main_menu")]
+    ])
+    return keyboard
+
+def get_admin_content_missions_keyboard():
+    """Keyboard for mission management options."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✏️ Crear Misión", callback_data="admin_create_mission")],
+        [InlineKeyboardButton(text="🔄 Activar / Desactivar Misión", callback_data="admin_toggle_mission")],
+        [InlineKeyboardButton(text="📃 Ver Misiones Activas", callback_data="admin_view_active_missions")],
+        [InlineKeyboardButton(text="🔙 Volver", callback_data="admin_manage_content")]
+    ])
+    return keyboard
+
+def get_admin_content_badges_keyboard():
+    """Keyboard for badge management options."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🏆 Otorgar Insignia Manualmente", callback_data="admin_give_badge_manual")],
+        [InlineKeyboardButton(text="⚙️ Gestionar Insignias", callback_data="admin_manage_badges")],
+        [InlineKeyboardButton(text="🔙 Volver", callback_data="admin_manage_content")]
+    ])
+    return keyboard
+
+def get_admin_content_levels_keyboard():
+    """Keyboard for level management options."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🧩 Ajustar Niveles", callback_data="admin_adjust_levels")],
+        [InlineKeyboardButton(text="🔙 Volver", callback_data="admin_manage_content")]
+    ])
+    return keyboard
+
+def get_admin_content_rewards_keyboard():
+    """Keyboard for reward catalogue management options."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Añadir Recompensa", callback_data="admin_create_reward")],
+        [InlineKeyboardButton(text="✏️ Editar / Eliminar Recompensa", callback_data="admin_edit_reward")],
+        [InlineKeyboardButton(text="📦 Ver Recompensas Canjeadas", callback_data="admin_view_claimed_rewards")],
+        [InlineKeyboardButton(text="🔙 Volver", callback_data="admin_manage_content")]
+    ])
+    return keyboard
+
+def get_admin_content_auctions_keyboard():
+    """Keyboard for auction management options."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🛒 Crear Subasta", callback_data="admin_create_auction")],
+        [InlineKeyboardButton(text="📋 Ver Subastas Activas / Finalizadas", callback_data="admin_view_auctions")],
+        [InlineKeyboardButton(text="⛔ Finalizar Subasta Manualmente", callback_data="admin_finish_auction")],
+        [InlineKeyboardButton(text="🔙 Volver", callback_data="admin_manage_content")]
+    ])
+    return keyboard
+
+def get_admin_content_daily_gifts_keyboard():
+    """Keyboard for daily gift configuration options."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎯 Configurar Regalo del Día", callback_data="admin_configure_daily_gift")],
+        [InlineKeyboardButton(text="🔙 Volver", callback_data="admin_manage_content")]
+    ])
+    return keyboard
+
 # --- Funciones para la navegación de menú ---
 # Estas funciones están más orientadas a la lógica de estado que a la creación de teclados per se,
 # pero se mantienen aquí para compatibilidad si las usas para generar teclados dinámicos.

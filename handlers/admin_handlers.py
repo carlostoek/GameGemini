@@ -22,6 +22,13 @@ from utils.keyboard_utils import (
     get_main_menu_keyboard,
     get_reaction_keyboard,
     get_admin_manage_users_keyboard,
+    get_admin_manage_content_keyboard,
+    get_admin_content_missions_keyboard,
+    get_admin_content_badges_keyboard,
+    get_admin_content_levels_keyboard,
+    get_admin_content_rewards_keyboard,
+    get_admin_content_auctions_keyboard,
+    get_admin_content_daily_gifts_keyboard,
 )
 from utils.message_utils import get_profile_message
 from config import Config
@@ -228,7 +235,219 @@ async def admin_manage_content(callback: CallbackQuery):
         await callback.answer("Acceso denegado", show_alert=True)
         return
     await callback.message.edit_text(
-        "Gestión de contenido en desarrollo.", reply_markup=get_admin_main_keyboard()
+        "🎮 *Gestionar Contenido / Juego* - Selecciona una categoría:",
+        reply_markup=get_admin_manage_content_keyboard(),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_content_missions")
+async def admin_content_missions(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "📌 *Misiones* - Selecciona una opción:",
+        reply_markup=get_admin_content_missions_keyboard(),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_content_badges")
+async def admin_content_badges(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "🏅 *Insignias* - Selecciona una opción:",
+        reply_markup=get_admin_content_badges_keyboard(),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_content_levels")
+async def admin_content_levels(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "📈 *Niveles* - Selecciona una opción:",
+        reply_markup=get_admin_content_levels_keyboard(),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_content_rewards")
+async def admin_content_rewards(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "🎁 *Recompensas (Catálogo VIP)* - Selecciona una opción:",
+        reply_markup=get_admin_content_rewards_keyboard(),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_content_auctions")
+async def admin_content_auctions(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "📦 *Subastas* - Selecciona una opción:",
+        reply_markup=get_admin_content_auctions_keyboard(),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_content_daily_gifts")
+async def admin_content_daily_gifts(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "🎁 *Regalos Diarios* - Selecciona una opción:",
+        reply_markup=get_admin_content_daily_gifts_keyboard(),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_toggle_mission")
+async def admin_toggle_mission(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_missions_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_view_active_missions")
+async def admin_view_active_missions(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_missions_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_give_badge_manual")
+async def admin_give_badge_manual(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_badges_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_manage_badges")
+async def admin_manage_badges(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_badges_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_adjust_levels")
+async def admin_adjust_levels(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_levels_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_edit_reward")
+async def admin_edit_reward(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_rewards_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_view_claimed_rewards")
+async def admin_view_claimed_rewards(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_rewards_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_create_auction")
+async def admin_create_auction(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_auctions_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_view_auctions")
+async def admin_view_auctions(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_auctions_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_finish_auction")
+async def admin_finish_auction(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_auctions_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_configure_daily_gift")
+async def admin_configure_daily_gift(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Funcionalidad en desarrollo.",
+        reply_markup=get_admin_content_daily_gifts_keyboard(),
     )
     await callback.answer()
 
