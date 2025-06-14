@@ -83,6 +83,18 @@ def get_admin_main_keyboard():
     ])
     return keyboard
 
+def get_admin_manage_users_keyboard():
+    """Returns the keyboard for user management options in the admin panel."""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Sumar Puntos a Usuario", callback_data="admin_add_points")],
+        [InlineKeyboardButton(text="➖ Restar Puntos a Usuario", callback_data="admin_deduct_points")],
+        [InlineKeyboardButton(text="🔍 Ver Perfil de Usuario", callback_data="admin_view_user")],
+        [InlineKeyboardButton(text="🔎 Buscar Usuario", callback_data="admin_search_user")],
+        [InlineKeyboardButton(text="📢 Notificar a Usuarios", callback_data="admin_notify_users")],
+        [InlineKeyboardButton(text="🔙 Volver al Menú Principal de Administrador", callback_data="admin_main_menu")]
+    ])
+    return keyboard
+
 # --- Funciones para la navegación de menú ---
 # Estas funciones están más orientadas a la lógica de estado que a la creación de teclados per se,
 # pero se mantienen aquí para compatibilidad si las usas para generar teclados dinámicos.
