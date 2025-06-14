@@ -17,7 +17,6 @@ from services.point_service import PointService
 from services.reward_service import RewardService
 from services.mission_service import MissionService
 from services.level_service import LevelService # Not directly used here, but good to have
-from services.subscription_service import SubscriptionService
 from utils.keyboard_utils import (
     get_admin_main_keyboard,
     get_main_menu_keyboard,
@@ -30,6 +29,7 @@ from utils.keyboard_utils import (
     get_admin_content_rewards_keyboard,
     get_admin_content_auctions_keyboard,
     get_admin_content_daily_gifts_keyboard,
+    get_back_keyboard,
 )
 from utils.message_utils import get_profile_message
 from config import Config
@@ -112,6 +112,7 @@ async def admin_add_points(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "Ingresa el ID de usuario o el username (con @) al que deseas **sumar** puntos:",
         parse_mode="Markdown",
+        reply_markup=get_back_keyboard("admin_manage_users"),
     )
     await state.update_data(points_operation="add")
     await state.set_state(AdminStates.assigning_points_target)
@@ -125,6 +126,7 @@ async def admin_deduct_points(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "Ingresa el ID de usuario o el username (con @) al que deseas **restar** puntos:",
         parse_mode="Markdown",
+        reply_markup=get_back_keyboard("admin_manage_users"),
     )
     await state.update_data(points_operation="deduct")
     await state.set_state(AdminStates.assigning_points_target)
@@ -138,6 +140,7 @@ async def admin_view_user(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "Envía el ID de usuario o username (@) para ver su perfil:",
         parse_mode="Markdown",
+        reply_markup=get_back_keyboard("admin_manage_users"),
     )
     await state.set_state(AdminStates.view_user_identifier)
     await callback.answer()
@@ -169,7 +172,10 @@ async def admin_search_user(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != Config.ADMIN_ID:
         await callback.answer("Acceso denegado", show_alert=True)
         return
-    await callback.message.edit_text("Ingresa un término de búsqueda (ID o nombre de usuario):")
+    await callback.message.edit_text(
+        "Ingresa un término de búsqueda (ID o nombre de usuario):",
+        reply_markup=get_back_keyboard("admin_manage_users"),
+    )
     await state.set_state(AdminStates.search_user_query)
     await callback.answer()
 
@@ -207,7 +213,10 @@ async def admin_notify_users(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != Config.ADMIN_ID:
         await callback.answer("Acceso denegado", show_alert=True)
         return
-    await callback.message.edit_text("Escribe el mensaje que deseas enviar a todos los usuarios:")
+    await callback.message.edit_text(
+        "Escribe el mensaje que deseas enviar a todos los usuarios:",
+        reply_markup=get_back_keyboard("admin_manage_users"),
+    )
     await state.set_state(AdminStates.notify_users_text)
     await callback.answer()
 
@@ -465,22 +474,6 @@ async def admin_manage_events_sorteos(callback: CallbackQuery):
     await callback.answer()
 
 
-@router.callback_query(F.data == "admin_generate_token")
-async def admin_generate_token(callback: CallbackQuery, session: AsyncSession, bot: Bot):
-    if callback.from_user.id != Config.ADMIN_ID:
-        await callback.answer("Acceso denegado", show_alert=True)
-        return
-    service = SubscriptionService(session)
-    token_obj = await service.create_token()
-    bot_info = await bot.get_me()
-    invite_link = f"https://t.me/{bot_info.username}?start={token_obj.token}"
-    await callback.message.edit_text(
-        f"Token generado:\n{invite_link}",
-        reply_markup=get_admin_main_keyboard(),
-        parse_mode=None,
-    )
-    await callback.answer()
-
 
 @router.callback_query(F.data == "admin_bot_config")
 async def admin_bot_config(callback: CallbackQuery):
@@ -496,7 +489,11 @@ async def admin_bot_config(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_create_reward")
 async def admin_start_create_reward(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Ingresa el **nombre** de la recompensa:", parse_mode="Markdown")
+    await callback.message.edit_text(
+        "Ingresa el **nombre** de la recompensa:",
+        parse_mode="Markdown",
+        reply_markup=get_back_keyboard("admin_content_rewards"),
+    )
     await state.set_state(AdminStates.creating_reward_name)
     await callback.answer()
 
@@ -545,7 +542,10 @@ async def admin_process_reward_stock(message: Message, state: FSMContext, sessio
 @router.callback_query(F.data == "admin_create_mission")
 async def admin_start_create_mission(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Ingresa el **nombre** de la misión:")
+    await callback.message.edit_text(
+        "Ingresa el **nombre** de la misión:",
+        reply_markup=get_back_keyboard("admin_content_missions"),
+    )
     await state.set_state(AdminStates.creating_mission_name)
     await callback.answer()
 
@@ -697,7 +697,9 @@ async def admin_cancel_reset_season(callback: CallbackQuery):
 async def admin_start_assign_points(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != Config.ADMIN_ID: return
     await callback.message.edit_text(
-        "Ingresa el ID de usuario o el username (con @) al que quieres asignar puntos:")
+        "Ingresa el ID de usuario o el username (con @) al que quieres asignar puntos:",
+        reply_markup=get_back_keyboard("admin_manage_users"),
+    )
     await state.update_data(points_operation="generic")
     await state.set_state(AdminStates.assigning_points_target)
     await callback.answer()
@@ -769,7 +771,10 @@ async def admin_process_assign_points_amount(message: Message, state: FSMContext
 @router.callback_query(F.data == "admin_activate_event")
 async def admin_start_activate_event(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Ingresa el **nombre** del evento:")
+    await callback.message.edit_text(
+        "Ingresa el **nombre** del evento:",
+        reply_markup=get_back_keyboard("admin_main_menu"),
+    )
     await state.set_state(AdminStates.activating_event_name)
     await callback.answer()
 
@@ -856,7 +861,8 @@ async def admin_start_channel_post_reactions(callback: CallbackQuery, state: FSM
     await callback.message.edit_text(
         "Por favor, envía el **texto del mensaje** que quieres publicar en el canal. "
         "Este mensaje tendrá los botones de reacción configurados debajo.",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=get_back_keyboard("admin_main_menu"),
     )
     await state.set_state(AdminStates.waiting_for_channel_post_text)
     await callback.answer()

@@ -11,7 +11,6 @@ from services.level_service import LevelService
 from services.achievement_service import AchievementService, ACHIEVEMENTS
 from services.mission_service import MissionService
 from services.reward_service import RewardService
-from services.subscription_service import SubscriptionService
 from utils.keyboard_utils import (
     get_main_menu_keyboard, get_profile_keyboard, get_missions_keyboard,
     get_reward_keyboard, get_confirm_purchase_keyboard, get_ranking_keyboard,
@@ -65,6 +64,18 @@ async def _handle_start_flow(message: Message, session: AsyncSession, bot: Bot) 
             reply_markup=get_admin_main_keyboard(),
         )
     else:
+        try:
+            member = await bot.get_chat_member(Config.CHANNEL_ID, user_id)
+            is_member = member.status in {"member", "administrator", "creator"}
+        except Exception:
+            is_member = False
+
+        if not is_member:
+            await message.answer(
+                "Debes unirte al canal para utilizar el bot.",
+            )
+            return
+
         await message.answer(
             BOT_MESSAGES["start_welcome_returning_user"]
             if not is_new_user
@@ -74,38 +85,9 @@ async def _handle_start_flow(message: Message, session: AsyncSession, bot: Bot) 
 
     await set_user_menu_state(session, user_id, "root")
 
-@router.message(CommandStart(deep_link=True))
-async def cmd_start(message: Message, session: AsyncSession, bot: Bot):
-    user_id = message.from_user.id
-    username = message.from_user.username
-    first_name = message.from_user.first_name
-    last_name = message.from_user.last_name
-
-    args = message.text.split(maxsplit=1)
-    token = args[1] if len(args) > 1 else None
-    if token:
-        service = SubscriptionService(session)
-        if await service.is_valid(token):
-            token_obj = await service.get_token(token)
-            invite = await bot.create_chat_invite_link(
-                Config.CHANNEL_ID,
-                expire_date=token_obj.expires_at,
-                member_limit=1,
-            )
-            await message.answer(
-                f"Aquí está tu enlace de invitación:\n{invite.invite_link}",
-                parse_mode=None,
-            )
-        else:
-            await message.answer("Token inválido o expirado.")
-            return
-
-    await _handle_start_flow(message, session, bot)
-
-
 @router.message(CommandStart())
-async def cmd_start_simple(message: Message, session: AsyncSession, bot: Bot):
-    """Handle /start without deep link token."""
+async def cmd_start(message: Message, session: AsyncSession, bot: Bot):
+    """Handle /start command."""
     await _handle_start_flow(message, session, bot)
 
 
