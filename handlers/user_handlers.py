@@ -46,22 +46,28 @@ async def cmd_start(message: Message, session: AsyncSession):
             first_name=first_name,
             last_name=last_name,
             points=0,
-            level=1
+            level=1,
         )
         session.add(new_user)
         await session.commit()
         await session.refresh(new_user)
         logger.info(f"New user registered: {user_id} - {username}")
-        await message.answer(
-            BOT_MESSAGES["start_welcome_new_user"],
-            reply_markup=get_main_reply_keyboard() # Usar el teclado de respuesta principal
-        )
+
     else:
         # Usuario existente
         logger.info(f"Returning user: {user_id} - {username}")
+
+    if user_id == Config.ADMIN_ID:
         await message.answer(
-            BOT_MESSAGES["start_welcome_returning_user"],
-            reply_markup=get_main_reply_keyboard() # Usar el teclado de respuesta principal
+            "Bienvenido al panel de administración, Diana.",
+            reply_markup=get_admin_main_keyboard(),
+        )
+    else:
+        await message.answer(
+            BOT_MESSAGES["start_welcome_returning_user"]
+            if user
+            else BOT_MESSAGES["start_welcome_new_user"],
+            reply_markup=get_main_reply_keyboard(),
         )
     # Establecer el estado inicial del menú
     await set_user_menu_state(session, user_id, "root")

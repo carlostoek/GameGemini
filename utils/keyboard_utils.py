@@ -73,17 +73,12 @@ def get_reaction_keyboard(message_id: int):
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_admin_main_keyboard():
-    """Returns the main keyboard for admin actions."""
+    """Returns the top level keyboard for admin actions."""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Crear Recompensa", callback_data="admin_create_reward")],
-        [InlineKeyboardButton(text="📝 Gestionar Recompensas", callback_data="admin_manage_rewards")],
-        [InlineKeyboardButton(text="➕ Crear Misión", callback_data="admin_create_mission")],
-        [InlineKeyboardButton(text="📝 Gestionar Misiones", callback_data="admin_manage_missions")],
-        [InlineKeyboardButton(text="➕ Crear Evento", callback_data="admin_create_event")],
-        [InlineKeyboardButton(text="📝 Gestionar Eventos", callback_data="admin_manage_events")],
-        [InlineKeyboardButton(text="📊 Ver Estadísticas", callback_data="admin_stats")],
-        [InlineKeyboardButton(text="💰 Asignar Puntos", callback_data="admin_assign_points")],
-        [InlineKeyboardButton(text="📢 Enviar mensaje con reacciones al Canal", callback_data="admin_send_channel_post_reactions")],
+        [InlineKeyboardButton(text="🧑‍💼 Gestionar Usuarios", callback_data="admin_manage_users")],
+        [InlineKeyboardButton(text="🎮 Gestionar Contenido/Juego", callback_data="admin_manage_content")],
+        [InlineKeyboardButton(text="🎉 Gestionar Eventos y Sorteos", callback_data="admin_manage_events_sorteos")],
+        [InlineKeyboardButton(text="⚙️ Configuración del Bot", callback_data="admin_bot_config")],
         [InlineKeyboardButton(text="🔙 Menú Principal", callback_data="menu_principal")]
     ])
     return keyboard
