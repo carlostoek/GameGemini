@@ -56,7 +56,55 @@ async def admin_panel(message: Message):
     if message.from_user.id != Config.ADMIN_ID:
         await message.answer("Acceso denegado. No eres administrador.")
         return
-    await message.answer("Bienvenido al panel de administración, Diana.", reply_markup=get_admin_main_keyboard())
+    await message.answer(
+        "Bienvenido al panel de administración, Diana.",
+        reply_markup=get_admin_main_keyboard(),
+    )
+
+
+@router.callback_query(F.data == "admin_manage_users")
+async def admin_manage_users(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Gestión de usuarios en desarrollo.", reply_markup=get_admin_main_keyboard()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_manage_content")
+async def admin_manage_content(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Gestión de contenido en desarrollo.", reply_markup=get_admin_main_keyboard()
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_manage_events_sorteos")
+async def admin_manage_events_sorteos(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Gestión de eventos y sorteos en desarrollo.",
+        reply_markup=get_admin_main_keyboard(),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "admin_bot_config")
+async def admin_bot_config(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Configuración del bot en desarrollo.", reply_markup=get_admin_main_keyboard()
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data == "admin_create_reward")
