@@ -22,11 +22,3 @@ async def get_session() -> async_sessionmaker[AsyncSession]:
         raise RuntimeError("Database engine not initialized. Call init_db() first.")
     async_session = async_sessionmaker(bind=_engine, class_=AsyncSession, expire_on_commit=False)
     return async_session
-async def init_db():
-    global _engine
-    if _engine is None:
-        _engine = create_async_engine(Config.DATABASE_URL, echo=False, poolclass=NullPool)
-        async with _engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)  # <-- BORRA TODO
-            await conn.run_sync(Base.metadata.create_all)  # <-- CREA TODO DESDE CERO
-    return _engine

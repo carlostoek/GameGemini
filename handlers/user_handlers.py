@@ -307,7 +307,7 @@ async def handle_reaction_callback(callback: CallbackQuery, session: AsyncSessio
         return
 
     # Verificar si el usuario ya reaccionó a este mensaje para evitar spam de puntos
-    if user.reacted_to_messages and user.reacted_to_messages.get(str(target_message_id)):
+    if user.channel_reactions and user.channel_reactions.get(str(target_message_id)):
         await callback.answer("Ya has reaccionado a este mensaje.", show_alert=True)
         return
 
@@ -316,9 +316,9 @@ async def handle_reaction_callback(callback: CallbackQuery, session: AsyncSessio
     leveled_up = await level_service.check_for_level_up(updated_user) # Verificar si sube de nivel
 
     # Marcar el mensaje como reaccionado por el usuario
-    if user.reacted_to_messages is None:
-        user.reacted_to_messages = {}
-    user.reacted_to_messages[str(target_message_id)] = True # Puedes guardar el timestamp si quieres más detalle
+    if user.channel_reactions is None:
+        user.channel_reactions = {}
+    user.channel_reactions[str(target_message_id)] = True  # Puedes guardar el timestamp si quieres más detalle
     await session.commit() # Guardar el estado de reacción
 
     # Verificar si hay misiones relacionadas con la reacción
