@@ -30,6 +30,50 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
+
+async def _handle_start_flow(message: Message, session: AsyncSession, bot: Bot) -> None:
+    """Common logic for /start handling once user is identified."""
+    user_id = message.from_user.id
+    username = message.from_user.username
+    first_name = message.from_user.first_name
+    last_name = message.from_user.last_name
+
+    user = await session.get(User, user_id)
+    is_new_user = False
+
+    if not user:
+        new_user = User(
+            id=user_id,
+            username=username,
+            first_name=first_name,
+            last_name=last_name,
+            points=0,
+            level=1,
+        )
+        session.add(new_user)
+        await session.commit()
+        await session.refresh(new_user)
+        user = new_user
+        is_new_user = True
+        logger.info(f"New user registered: {user_id} - {username}")
+    else:
+        logger.info(f"Returning user: {user_id} - {username}")
+
+    if user_id == Config.ADMIN_ID:
+        await message.answer(
+            "Bienvenido al panel de administración, Diana.",
+            reply_markup=get_admin_main_keyboard(),
+        )
+    else:
+        await message.answer(
+            BOT_MESSAGES["start_welcome_returning_user"]
+            if not is_new_user
+            else BOT_MESSAGES["start_welcome_new_user"],
+            reply_markup=get_main_reply_keyboard(),
+        )
+
+    await set_user_menu_state(session, user_id, "root")
+
 @router.message(CommandStart(deep_link=True))
 async def cmd_start(message: Message, session: AsyncSession, bot: Bot):
     user_id = message.from_user.id
@@ -55,41 +99,13 @@ async def cmd_start(message: Message, session: AsyncSession, bot: Bot):
             await message.answer("Token inválido o expirado.")
             return
 
-    user = await session.get(User, user_id)
+    await _handle_start_flow(message, session, bot)
 
-    if not user:
-        # Nuevo usuario
-        new_user = User(
-            id=user_id,
-            username=username,
-            first_name=first_name,
-            last_name=last_name,
-            points=0,
-            level=1,
-        )
-        session.add(new_user)
-        await session.commit()
-        await session.refresh(new_user)
-        logger.info(f"New user registered: {user_id} - {username}")
 
-    else:
-        # Usuario existente
-        logger.info(f"Returning user: {user_id} - {username}")
-
-    if user_id == Config.ADMIN_ID:
-        await message.answer(
-            "Bienvenido al panel de administración, Diana.",
-            reply_markup=get_admin_main_keyboard(),
-        )
-    else:
-        await message.answer(
-            BOT_MESSAGES["start_welcome_returning_user"]
-            if user
-            else BOT_MESSAGES["start_welcome_new_user"],
-            reply_markup=get_main_reply_keyboard(),
-        )
-    # Establecer el estado inicial del menú
-    await set_user_menu_state(session, user_id, "root")
+@router.message(CommandStart())
+async def cmd_start_simple(message: Message, session: AsyncSession, bot: Bot):
+    """Handle /start without deep link token."""
+    await _handle_start_flow(message, session, bot)
 
 
 # Handler para el botón de "Menú Principal" (callback_data)
