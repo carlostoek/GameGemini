@@ -40,3 +40,10 @@ class PointService:
     async def get_user_points(self, user_id: int) -> int:
         user = await self.session.get(User, user_id)
         return user.points if user else 0
+
+    async def get_top_users(self, limit: int = 10) -> list[User]:
+        """Return the top users ordered by points."""
+        stmt = select(User).order_by(User.points.desc()).limit(limit)
+        result = await self.session.execute(stmt)
+        top_users = result.scalars().all()
+        return top_users

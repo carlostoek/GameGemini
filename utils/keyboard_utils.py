@@ -15,7 +15,6 @@ def get_main_menu_keyboard():
 def get_profile_keyboard():
     """Returns the keyboard for the profile section."""
     keyboard = [
-        [InlineKeyboardButton(text="⬅️ Volver", callback_data="menu:back")],
         [InlineKeyboardButton(text="🏠 Menú Principal", callback_data="menu_principal")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -36,7 +35,6 @@ def get_missions_keyboard(missions: list, offset: int = 0):
     if nav_buttons:
         keyboard.append(nav_buttons)
 
-    keyboard.append([InlineKeyboardButton(text="⬅️ Volver", callback_data="menu:back")])
     keyboard.append([InlineKeyboardButton(text="🏠 Menú Principal", callback_data="menu_principal")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -46,7 +44,6 @@ def get_reward_keyboard(rewards: list):
     keyboard = []
     for reward in rewards:
         keyboard.append([InlineKeyboardButton(text=f"{reward.name} ({reward.cost} Pts)", callback_data=f"buy_reward_{reward.id}")])
-    keyboard.append([InlineKeyboardButton(text="⬅️ Volver", callback_data="menu:back")])
     keyboard.append([InlineKeyboardButton(text="🏠 Menú Principal", callback_data="menu_principal")])
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
@@ -61,7 +58,6 @@ def get_confirm_purchase_keyboard(reward_id: int):
 def get_ranking_keyboard():
     """Returns the keyboard for the ranking section."""
     keyboard = [
-        [InlineKeyboardButton(text="⬅️ Volver", callback_data="menu:back")],
         [InlineKeyboardButton(text="🏠 Menú Principal", callback_data="menu_principal")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
