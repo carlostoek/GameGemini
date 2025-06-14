@@ -17,7 +17,13 @@ from services.point_service import PointService
 from services.reward_service import RewardService
 from services.mission_service import MissionService
 from services.level_service import LevelService # Not directly used here, but good to have
-from utils.keyboard_utils import get_admin_main_keyboard, get_main_menu_keyboard, get_reaction_keyboard # <--- NUEVA IMPORTACIÓN
+from utils.keyboard_utils import (
+    get_admin_main_keyboard,
+    get_main_menu_keyboard,
+    get_reaction_keyboard,
+    get_admin_manage_users_keyboard,
+)
+from utils.message_utils import get_profile_message
 from config import Config
 import logging # <--- NUEVA IMPORTACIÓN
 
@@ -50,6 +56,11 @@ class AdminStates(StatesGroup):
     # ¡NUEVO ESTADO FSM para enviar mensajes al canal con reacciones!
     waiting_for_channel_post_text = State()
 
+    # States for user management actions
+    view_user_identifier = State()
+    search_user_query = State()
+    notify_users_text = State()
+
 
 @router.message(Command("admin"))
 async def admin_panel(message: Message):
@@ -68,9 +79,147 @@ async def admin_manage_users(callback: CallbackQuery):
         await callback.answer("Acceso denegado", show_alert=True)
         return
     await callback.message.edit_text(
-        "Gestión de usuarios en desarrollo.", reply_markup=get_admin_main_keyboard()
+        "👥 *Gestionar Usuarios* - Elige una opción:",
+        reply_markup=get_admin_manage_users_keyboard(),
+        parse_mode="Markdown",
     )
     await callback.answer()
+
+@router.callback_query(F.data == "admin_main_menu")
+async def admin_back_to_main_menu(callback: CallbackQuery):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Bienvenido al panel de administración, Diana.",
+        reply_markup=get_admin_main_keyboard(),
+    )
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_add_points")
+async def admin_add_points(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Ingresa el ID de usuario o el username (con @) al que deseas **sumar** puntos:",
+        parse_mode="Markdown",
+    )
+    await state.update_data(points_operation="add")
+    await state.set_state(AdminStates.assigning_points_target)
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_deduct_points")
+async def admin_deduct_points(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Ingresa el ID de usuario o el username (con @) al que deseas **restar** puntos:",
+        parse_mode="Markdown",
+    )
+    await state.update_data(points_operation="deduct")
+    await state.set_state(AdminStates.assigning_points_target)
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_view_user")
+async def admin_view_user(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text(
+        "Envía el ID de usuario o username (@) para ver su perfil:",
+        parse_mode="Markdown",
+    )
+    await state.set_state(AdminStates.view_user_identifier)
+    await callback.answer()
+
+@router.message(AdminStates.view_user_identifier)
+async def admin_process_view_user(message: Message, state: FSMContext, session: AsyncSession):
+    if message.from_user.id != Config.ADMIN_ID:
+        return
+    identifier = message.text.strip()
+    user = None
+    if identifier.isdigit():
+        user = await session.get(User, int(identifier))
+    elif identifier.startswith('@'):
+        stmt = select(User).where(User.username == identifier[1:])
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
+
+    if not user:
+        await message.answer("Usuario no encontrado.")
+    else:
+        mission_service = MissionService(session)
+        active_missions = await mission_service.get_active_missions(user_id=user.id)
+        profile_text = await get_profile_message(user, active_missions)
+        await message.answer(profile_text, parse_mode="Markdown")
+    await state.clear()
+
+@router.callback_query(F.data == "admin_search_user")
+async def admin_search_user(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text("Ingresa un término de búsqueda (ID o nombre de usuario):")
+    await state.set_state(AdminStates.search_user_query)
+    await callback.answer()
+
+@router.message(AdminStates.search_user_query)
+async def admin_process_search_user(message: Message, state: FSMContext, session: AsyncSession):
+    if message.from_user.id != Config.ADMIN_ID:
+        return
+    query = message.text.strip()
+    users = []
+    if query.isdigit():
+        user = await session.get(User, int(query))
+        if user:
+            users = [user]
+    else:
+        stmt = select(User).where(
+            (User.username.ilike(f"%{query}%")) |
+            (User.first_name.ilike(f"%{query}%")) |
+            (User.last_name.ilike(f"%{query}%"))
+        ).limit(10)
+        result = await session.execute(stmt)
+        users = result.scalars().all()
+
+    if not users:
+        await message.answer("No se encontraron usuarios.")
+    else:
+        response = "Resultados de búsqueda:\n\n"
+        for u in users:
+            display = u.username if u.username else (u.first_name or "")
+            response += f"- {display} (ID: {u.id}) - {u.points} puntos\n"
+        await message.answer(response)
+    await state.clear()
+
+@router.callback_query(F.data == "admin_notify_users")
+async def admin_notify_users(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id != Config.ADMIN_ID:
+        await callback.answer("Acceso denegado", show_alert=True)
+        return
+    await callback.message.edit_text("Escribe el mensaje que deseas enviar a todos los usuarios:")
+    await state.set_state(AdminStates.notify_users_text)
+    await callback.answer()
+
+@router.message(AdminStates.notify_users_text)
+async def admin_process_notify_users(message: Message, state: FSMContext, session: AsyncSession, bot: Bot):
+    if message.from_user.id != Config.ADMIN_ID:
+        return
+    text = message.text
+    stmt = select(User.id)
+    result = await session.execute(stmt)
+    user_ids = [row[0] for row in result.all()]
+    sent = 0
+    for uid in user_ids:
+        try:
+            await bot.send_message(uid, text)
+            sent += 1
+        except Exception as e:
+            logger.warning(f"No se pudo enviar notificación a {uid}: {e}")
+    await message.answer(f"Notificación enviada a {sent} usuarios.", reply_markup=get_admin_main_keyboard())
+    await state.clear()
 
 
 @router.callback_query(F.data == "admin_manage_content")
@@ -310,7 +459,9 @@ async def admin_cancel_reset_season(callback: CallbackQuery):
 @router.callback_query(F.data == "admin_assign_points")
 async def admin_start_assign_points(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id != Config.ADMIN_ID: return
-    await callback.message.edit_text("Ingresa el ID de usuario o el username (con @) al que quieres asignar puntos:")
+    await callback.message.edit_text(
+        "Ingresa el ID de usuario o el username (con @) al que quieres asignar puntos:")
+    await state.update_data(points_operation="generic")
     await state.set_state(AdminStates.assigning_points_target)
     await callback.answer()
 
@@ -318,8 +469,18 @@ async def admin_start_assign_points(callback: CallbackQuery, state: FSMContext):
 async def admin_process_assign_points_target(message: Message, state: FSMContext):
     if message.from_user.id != Config.ADMIN_ID: return
     target_user_identifier = message.text.strip()
+    data = await state.get_data()
+    operation = data.get("points_operation", "generic")
     await state.update_data(target_user_identifier=target_user_identifier)
-    await message.answer(f"Ingresa la cantidad de puntos a asignar a `{target_user_identifier}` (puede ser negativo para restar):", parse_mode="Markdown")
+
+    if operation == "add":
+        prompt = f"Ingresa la cantidad de puntos a **sumar** a `{target_user_identifier}`:"
+    elif operation == "deduct":
+        prompt = f"Ingresa la cantidad de puntos a **restar** a `{target_user_identifier}`:"
+    else:
+        prompt = f"Ingresa la cantidad de puntos a asignar a `{target_user_identifier}` (puede ser negativo para restar):"
+
+    await message.answer(prompt, parse_mode="Markdown")
     await state.set_state(AdminStates.assigning_points_amount)
 
 @router.message(AdminStates.assigning_points_amount)
@@ -329,6 +490,7 @@ async def admin_process_assign_points_amount(message: Message, state: FSMContext
         points_to_add = int(message.text)
         data = await state.get_data()
         user_identifier = data['target_user_identifier']
+        operation = data.get('points_operation', 'generic')
 
         user = None
         if user_identifier.isdigit(): # Try to find by ID
@@ -344,8 +506,21 @@ async def admin_process_assign_points_amount(message: Message, state: FSMContext
             return
 
         point_service = PointService(session)
-        updated_user = await point_service.add_points(user.id, points_to_add) # Usamos add_points que maneja positivos/negativos
-        await message.answer(f"✅ Se han asignado `{points_to_add}` puntos a `{updated_user.first_name or updated_user.username}`. Ahora tiene `{updated_user.points}` puntos.", parse_mode="Markdown")
+        if operation == 'deduct':
+            updated_user = await point_service.deduct_points(user.id, points_to_add)
+            if updated_user:
+                await message.answer(
+                    f"✅ Se han restado `{points_to_add}` puntos a `{updated_user.first_name or updated_user.username}`. Ahora tiene `{updated_user.points}` puntos.",
+                    parse_mode="Markdown",
+                )
+            else:
+                await message.answer("No se pudo restar puntos (quizás el usuario no tiene suficientes).")
+        else:
+            updated_user = await point_service.add_points(user.id, points_to_add)
+            await message.answer(
+                f"✅ Se han sumado `{points_to_add}` puntos a `{updated_user.first_name or updated_user.username}`. Ahora tiene `{updated_user.points}` puntos.",
+                parse_mode="Markdown",
+            )
         await state.clear()
     except ValueError:
         await message.answer("Cantidad de puntos inválida. Por favor, ingresa un número.")
