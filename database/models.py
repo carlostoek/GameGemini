@@ -65,6 +65,13 @@ class Event(AsyncAttrs, Base):
     start_time = Column(DateTime, default=func.now())
     end_time = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
+
+
+class SubscriptionToken(AsyncAttrs, Base):
+    __tablename__ = "subscription_tokens"
+    token = Column(String, primary_key=True, unique=True)
+    expires_at = Column(DateTime)
+    created_at = Column(DateTime, default=func.now())
     
 # Funciones para manejar el estado del menú del usuario
 async def get_user_menu_state(session, user_id: int) -> str:

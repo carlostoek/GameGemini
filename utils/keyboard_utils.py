@@ -78,6 +78,7 @@ def get_admin_main_keyboard():
         [InlineKeyboardButton(text="🧑‍💼 Gestionar Usuarios", callback_data="admin_manage_users")],
         [InlineKeyboardButton(text="🎮 Gestionar Contenido/Juego", callback_data="admin_manage_content")],
         [InlineKeyboardButton(text="🎉 Gestionar Eventos y Sorteos", callback_data="admin_manage_events_sorteos")],
+        [InlineKeyboardButton(text="🔑 Generar Token", callback_data="admin_generate_token")],
         [InlineKeyboardButton(text="⚙️ Configuración del Bot", callback_data="admin_bot_config")],
         [InlineKeyboardButton(text="🔙 Menú Principal", callback_data="menu_principal")]
     ])
