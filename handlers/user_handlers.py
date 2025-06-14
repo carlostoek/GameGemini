@@ -93,7 +93,8 @@ async def cmd_start(message: Message, session: AsyncSession, bot: Bot):
                 member_limit=1,
             )
             await message.answer(
-                f"Aquí está tu enlace de invitación:\n{invite.invite_link}"
+                f"Aquí está tu enlace de invitación:\n{invite.invite_link}",
+                parse_mode=None,
             )
         else:
             await message.answer("Token inválido o expirado.")

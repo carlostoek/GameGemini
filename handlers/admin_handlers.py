@@ -477,6 +477,7 @@ async def admin_generate_token(callback: CallbackQuery, session: AsyncSession, b
     await callback.message.edit_text(
         f"Token generado:\n{invite_link}",
         reply_markup=get_admin_main_keyboard(),
+        parse_mode=None,
     )
     await callback.answer()
 
