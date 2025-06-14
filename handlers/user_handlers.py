@@ -14,9 +14,9 @@ from services.reward_service import RewardService
 from utils.keyboard_utils import (
     get_main_menu_keyboard, get_profile_keyboard, get_missions_keyboard,
     get_reward_keyboard, get_confirm_purchase_keyboard, get_ranking_keyboard,
-    get_reaction_keyboard,
-    get_root_menu, get_parent_menu, get_child_menu, # <--- Estas fueron añadidas/confirmadas
-    get_main_reply_keyboard # <--- Asegúrate de que esta esté aquí también
+    get_reaction_keyboard, get_admin_main_keyboard,
+    get_root_menu, get_parent_menu, get_child_menu,  # <--- Estas fueron añadidas/confirmadas
+    get_main_reply_keyboard  # <--- Asegúrate de que esta esté aquí también
 )
 from utils.message_utils import get_profile_message, get_mission_details_message, get_reward_details_message, get_ranking_message # Añadido get_ranking_message
 from utils.messages import BOT_MESSAGES # <--- Asegúrate de que esta esté importada
