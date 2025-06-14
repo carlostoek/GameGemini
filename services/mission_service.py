@@ -62,7 +62,7 @@ class MissionService:
         elif mission.type == "reaction":
             # For reaction missions, check if the specific reaction for that message_id is recorded
             if mission.action_data and mission.action_data.get('target_message_id') == target_message_id:
-                if user.reacted_messages and str(target_message_id) in user.reacted_messages:
+                if user.channel_reactions and str(target_message_id) in user.channel_reactions:
                     return True, "already_reacted_to_this_message"
             elif mission_completion_record: # If it's a generic reaction mission, check one-time completion
                 return True, "already_completed"
@@ -93,9 +93,9 @@ class MissionService:
         
         # Specific handling for reaction missions: record the message_id for which the reaction was given
         if mission.type == "reaction" and mission.requires_action and target_message_id:
-            if not user.reacted_messages:
-                user.reacted_messages = {}
-            user.reacted_messages[str(target_message_id)] = now # Record the reaction for this specific message
+            if not user.channel_reactions:
+                user.channel_reactions = {}
+            user.channel_reactions[str(target_message_id)] = now  # Record the reaction for this specific message
 
         # Add points to user. Event multiplier should be handled by PointService or calling context.
         # For simplicity here, we just add the base points.

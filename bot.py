@@ -7,7 +7,6 @@ from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from database.setup import get_session, init_db # Ahora init_db y get_session
@@ -22,7 +21,7 @@ logger = logging.getLogger(__name__)
 async def main():
     # --- CAMBIO DE OPTIMIZACIÓN DE DB AQUÍ ---
     # Inicializa la base de datos y el motor UNA SOLA VEZ
-    engine = await init_db()
+    await init_db()
     # Ahora, obtén la factoría de sesión una sola vez.
     # get_session() ya no llama a init_db(), sino que depende de _engine inicializado por init_db()
     Session = await get_session()
