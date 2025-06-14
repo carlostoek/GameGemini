@@ -78,7 +78,6 @@ def get_admin_main_keyboard():
         [InlineKeyboardButton(text="🧑‍💼 Gestionar Usuarios", callback_data="admin_manage_users")],
         [InlineKeyboardButton(text="🎮 Gestionar Contenido/Juego", callback_data="admin_manage_content")],
         [InlineKeyboardButton(text="🎉 Gestionar Eventos y Sorteos", callback_data="admin_manage_events_sorteos")],
-        [InlineKeyboardButton(text="🔑 Generar Token", callback_data="admin_generate_token")],
         [InlineKeyboardButton(text="⚙️ Configuración del Bot", callback_data="admin_bot_config")],
         [InlineKeyboardButton(text="🔙 Menú Principal", callback_data="menu_principal")]
     ])
@@ -226,3 +225,11 @@ def get_main_reply_keyboard():
         one_time_keyboard=False # Keep the keyboard visible
     )
     return keyboard
+
+
+def get_back_keyboard(callback_data: str) -> InlineKeyboardMarkup:
+    """Return a simple keyboard with a single back button."""
+    keyboard = [
+        [InlineKeyboardButton(text="🔙 Volver", callback_data=callback_data)]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
