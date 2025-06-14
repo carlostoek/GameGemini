@@ -1,8 +1,9 @@
 # utils/message_utils.py
 from database.models import User, Mission, Reward
-from services.level_service import get_level_threshold, LEVEL_THRESHOLDS
+from services.level_service import get_level_threshold
 from services.achievement_service import ACHIEVEMENTS
-from utils.messages import BOT_MESSAGES # <--- NUEVA IMPORTACIÓN
+from utils.messages import BOT_MESSAGES
+import datetime
 
 async def get_profile_message(user: User, active_missions: list[Mission]) -> str:
     points_to_next_level_text = ""
@@ -82,9 +83,7 @@ async def get_reward_details_message(reward: Reward, user_points: int) -> str:
         reward_name=reward.name,
         reward_description=reward.description,
         reward_cost=reward.cost,
-        stock_info=stock_info,
-        user_points=user_points,
-        can_afford_text=BOT_MESSAGES["reward_details_can_afford"] if user_points >= reward.cost else BOT_MESSAGES["reward_details_cannot_afford"]
+        stock_info=stock_info
     )
 
 async def get_ranking_message(users_ranking: list[User]) -> str:

@@ -1,9 +1,8 @@
-import datetime
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton # Añadido ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from database.models import User, Mission, Reward, get_user_menu_state, set_user_menu_state
@@ -207,7 +206,7 @@ async def handle_cancel_purchase_callback(callback: CallbackQuery, session: Asyn
 @router.callback_query(F.data.startswith("mission_"))
 async def handle_mission_details_callback(callback: CallbackQuery, session: AsyncSession):
     user_id = callback.from_user.id
-    mission_id = callback.data.split('_')[1]
+    mission_id = callback.data[len("mission_"):]
 
     mission_service = MissionService(session)
     mission = await mission_service.get_mission_by_id(mission_id)
@@ -234,7 +233,7 @@ async def handle_mission_details_callback(callback: CallbackQuery, session: Asyn
 @router.callback_query(F.data.startswith("complete_mission_"))
 async def handle_complete_mission_callback(callback: CallbackQuery, session: AsyncSession):
     user_id = callback.from_user.id
-    mission_id = callback.data.split('_')[2] # Ajustar si el formato es mission_ID
+    mission_id = callback.data[len("complete_mission_"):]
 
     mission_service = MissionService(session)
     point_service = PointService(session)
